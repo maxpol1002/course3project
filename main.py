@@ -31,35 +31,59 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_table_insert(user_id, user_name, user_surname, username, user_status)
 
     if user_status == 1:
-        await update.message.reply_text(f"Hello, {user_name}, your status is: {user_status}", reply_markup=admin_menu_markup)
+        await update.message.reply_text(f"Hello, {user_name}, your status is: {user_status}",
+                                        reply_markup=admin_menu_markup)
 
     else:
         await update.message.reply_text(f"Hello unknown user, {user.first_name} {user.last_name}, "
                                         f"your status is: {user_status}")
 
 
+def build_inline_keyboard(users_list, selected_users=None):
+    users = []
+    idx = 1
+    for user in users_list:
+        is_selected = user.user_id in selected_users if selected_users else False
+        check_mark = "❌" if is_selected else "✅"
+        users.append([
+            InlineKeyboardButton(f"{idx}. {user.user_name} {user.user_surname}, username: {user.username}",
+                                 callback_data="do_nothing"),
+            InlineKeyboardButton(check_mark, callback_data=f"select_user_{user.user_id}")
+        ])
+        idx += 1
+    if selected_users:
+        users.append([InlineKeyboardButton("Create task", callback_data="send_selected")])
+    reply_user_list_markup = InlineKeyboardMarkup(users)
+    return reply_user_list_markup
+
+
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     current_user = update.effective_user
     user_status = get_user_status(current_user.id)
     user_input = update.message.text
-    users_list = []
-    users = []
     if user_input == "👤 Send direct message" and user_status == 1:
-        users_list = db_get_all_users()
-        print(users_list[0].username)
-    n = 1
-    for user in users_list:
-        users.append([InlineKeyboardButton(f"{n}. {user.user_name} {user.user_surname}, username: {user.username}",
-                                           callback_data=f'user {user.user_surname}')])
-        n += 1
-    reply_user_list_markup = InlineKeyboardMarkup(users)
-    await update.message.reply_text(f"List of all users:", reply_markup=reply_user_list_markup)
+        await update.message.reply_text(f"List of all users:", reply_markup=build_inline_keyboard(db_get_all_users()))
 
 
 async def send_group_msg_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Selected option: {query.data}")
+    if query.data.startswith("select_user"):
+        selected_user_id = int(query.data.split("_")[2])
+        selected_users = context.user_data.get("selected_users", [])
+        if selected_user_id in selected_users:
+            selected_users.remove(selected_user_id)
+        else:
+            selected_users.append(selected_user_id)
+        context.user_data["selected_users"] = selected_users
+        await query.edit_message_reply_markup(reply_markup=build_inline_keyboard(db_get_all_users(), selected_users))
+
+    elif query.data.startswith("send_selected"):
+        selected_users = context.user_data["selected_users"]
+        for user_id in selected_users:
+            await context.bot.send_message(user_id, "hello task1")
+
+        context.user_data["selected_users"] = []
 
 
 if __name__ == '__main__':
