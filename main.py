@@ -2,7 +2,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Bot
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, \
     filters, ConversationHandler
-from db import db_user_data_table_insert, db_get_all_users, db_user_tasks_table_insert, db_get_all_tasks
+from db import db_user_data_table_insert, db_get_all_users, db_user_tasks_table_insert, db_get_all_tasks, db_get_user_data, db_get_tasks_for_user
 from config import TOKEN
 from datetime import datetime
 
@@ -25,7 +25,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_menu = [
         ["👥 Create task", "📋 View current tasks"]
     ]
+    user_menu = [
+        ["📋 View my tasks"]
+    ]
     admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
+    user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
     user = update.effective_user
     user_id = user.id
     user_name = user.first_name
@@ -40,7 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     else:
         await update.message.reply_text(f"Hello unknown user, {user.first_name} {user.last_name}, "
-                                        f"your status is: {user_status}")
+                                        f"your status is: {user_status}", reply_markup=user_menu_markup)
 
 
 def build_inline_keyboard(users_list, selected_users=None) -> InlineKeyboardMarkup:
@@ -65,6 +69,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     current_user = update.effective_user
     user_status = get_user_status(current_user.id)
     user_input = update.message.text
+    admin_menu = [
+        ["👥 Create task", "📋 View current tasks", "🔢 Sort tasks"]
+    ]
+    admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
     if user_status == 1:
         match user_input:
             case "👥 Create task":
@@ -73,16 +81,35 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             case "📋 View current tasks":
                 active_tasks = db_get_all_tasks()
                 if active_tasks:
-                    await update.message.reply_text("Active tasks:")
+                    await update.message.reply_text("Active tasks:", reply_markup=admin_menu_markup)
+                    for task in active_tasks:
+                        await update.message.reply_text(task.print_data())
+                else:
+                    await update.message.reply_text("There are no tasks assigned at this moment.")
+
+            case "🔢 Sort tasks":
+                sort_inline_keyboard = [InlineKeyboardButton("Importance", callback_data="sort.tasks.importance_level"),
+                                        InlineKeyboardButton("Date of issue", callback_data="sort.tasks.task_setting_time"),
+                                        InlineKeyboardButton("Deadline", callback_data="sort.tasks.task_deadline")]
+                sort_inline_markup = InlineKeyboardMarkup([sort_inline_keyboard])
+
+                await update.message.reply_text("Sort tasks by:", reply_markup=sort_inline_markup)
+
+    else:
+        match user_input:
+            case "📋 View my tasks":
+                active_tasks = db_get_tasks_for_user(str(current_user.id))
+                if active_tasks:
+                    await update.message.reply_text("My tasks:")
                     for task in active_tasks:
                         await update.message.reply_text(f"Task {task.task_id}: {task.task_name}\n"
                                                         f"Description: {task.task_description}\n"
                                                         f"Importance level: {task.importance_level}\n"
                                                         f"Date of issue: {task.task_setting_time}\n"
-                                                        f"Deadline: {task.task_deadline}\n"
-                                                        f"Assigned for: {task.assigned_users}")
+                                                        f"Deadline: {task.task_deadline}\n")
+
                 else:
-                    await update.message.reply_text("There are no tasks assigned at this moment.")
+                    await update.message.reply_text("You have no tasks at this moment.")
 
 
 async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,6 +140,8 @@ async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline, selected_users)
     await update.message.reply_text("Task created successfully!")
+    for user_id in selected_users_list:
+        await context.bot.send_message(user_id, "Hello, you have new task!")
     context.user_data.clear()
 
     return ConversationHandler.END
@@ -135,9 +164,16 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
 
     elif query.data.startswith("send_selected"):
-        await context.bot.send_message(648380859, "Input task name:")
+        await context.bot.send_message(query.message.chat.id, "Input task name:")
         await query.answer()
         return TASK_DATA
+
+    elif query.data.startswith("sort.tasks"):
+        sort_value = str(query.data.split(".")[2])
+        sorted_tasks = sorted(db_get_all_tasks(), key=lambda x: getattr(x, sort_value))
+        for task in sorted_tasks:
+            await context.bot.send_message(query.message.chat.id, task.print_data())
+        await query.answer()
 
 
 if __name__ == '__main__':
@@ -148,8 +184,7 @@ if __name__ == '__main__':
                 MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)
             ],
         },
-        fallbacks=[],
-        per_message=True
+        fallbacks=[]
     )
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
