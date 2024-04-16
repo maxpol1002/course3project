@@ -100,3 +100,11 @@ def db_get_tasks_for_user(user_id: str) -> Task or list or None:
 
     else:
         return None
+
+
+def db_delete_task(task_id: int) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f'DELETE FROM user_tasks WHERE id={task_id}')
+    conn.commit()
+    conn.close()

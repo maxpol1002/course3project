@@ -2,7 +2,8 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Bot
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, \
     filters, ConversationHandler
-from db import db_user_data_table_insert, db_get_all_users, db_user_tasks_table_insert, db_get_all_tasks, db_get_user_data, db_get_tasks_for_user
+from db import db_user_data_table_insert, db_get_all_users, db_user_tasks_table_insert, db_get_all_tasks, \
+    db_get_user_data, db_get_tasks_for_user, db_delete_task
 from config import TOKEN
 from datetime import datetime
 
@@ -23,7 +24,7 @@ def get_user_status(user_id) -> int:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_menu = [
-        ["👥 Create task", "📋 View current tasks"]
+        ["📋 View current tasks"]
     ]
     user_menu = [
         ["📋 View my tasks"]
@@ -70,7 +71,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_status = get_user_status(current_user.id)
     user_input = update.message.text
     admin_menu = [
-        ["👥 Create task", "📋 View current tasks", "🔢 Sort tasks"]
+        ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"]
     ]
     admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
     if user_status == 1:
@@ -94,6 +95,27 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 sort_inline_markup = InlineKeyboardMarkup([sort_inline_keyboard])
 
                 await update.message.reply_text("Sort tasks by:", reply_markup=sort_inline_markup)
+
+            case "🛠 Manage tasks":
+                admin_menu = [
+                    ["📋 View current tasks", "👥 Create task", "✏️ Edit task", "❌ Delete task"]
+                    ]
+                admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
+                await update.message.reply_text("Here you can manage all tasks.", reply_markup=admin_menu_markup)
+
+            case "❌ Delete task":
+                admin_menu = [
+                    ["📋 View current tasks", "👥 Create task", "✏️ Edit task", "❌ Delete task"]
+                ]
+                admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
+                active_tasks = db_get_all_tasks()
+                if active_tasks:
+                    await update.message.reply_text("Choose which task you want to delete:", reply_markup=admin_menu_markup)
+                    for task in active_tasks:
+                        delete_task_button = [[InlineKeyboardButton("Delete", callback_data=f"delete_task_{task.task_id}")]]
+                        await update.message.reply_text(task.print_data(), reply_markup=InlineKeyboardMarkup(delete_task_button))
+                else:
+                    await update.message.reply_text("There are no tasks assigned at this moment.")
 
     else:
         match user_input:
@@ -173,6 +195,12 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         sorted_tasks = sorted(db_get_all_tasks(), key=lambda x: getattr(x, sort_value))
         for task in sorted_tasks:
             await context.bot.send_message(query.message.chat.id, task.print_data())
+        await query.answer()
+
+    elif query.data.startswith("delete_task"):
+        task_id = int(query.data.split("_")[2])
+        db_delete_task(task_id)
+        await context.bot.send_message(query.message.chat.id, f"Task {task_id} was successfully deleted.")
         await query.answer()
 
 
