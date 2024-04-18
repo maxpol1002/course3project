@@ -1,5 +1,6 @@
 import datetime
 import sqlite3
+
 from User import User
 from Task import Task
 
@@ -30,12 +31,12 @@ def db_get_all_users() -> list:
 
 
 def db_user_tasks_table_insert(task_name: str, task_description: str, importance_level: int, task_setting_time: datetime,
-                               task_deadline: datetime, assigned_users_id: str) -> None:
+                               task_deadline: datetime, assigned_users_id: str, task_status: str) -> None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO user_tasks (task_name, task_description, importance_level, task_setting_time,'
-                   'task_deadline, assigned_users_id) VALUES (?, ?, ?, ?, ?, ?)',
-                   (task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id))
+                   'task_deadline, assigned_users_id, task_status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                   (task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id, task_status))
     conn.commit()
     conn.close()
 
@@ -44,14 +45,15 @@ def db_get_all_tasks() -> list:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT id, task_name, task_description, importance_level, task_setting_time, task_deadline, '
-                   'assigned_users_id FROM user_tasks')
+                   'assigned_users_id, task_status FROM user_tasks')
     rows = cursor.fetchall()
     tasks = []
     if rows:
         for row in rows:
-            task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str = row
+            task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = row
             assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
-            task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list)
+            task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline,
+                        assigned_users_id_list, task_status)
             tasks.append(task)
 
     conn.close()
@@ -61,50 +63,65 @@ def db_get_all_tasks() -> list:
 def db_get_user_data(user_id: int) -> str or None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute(f'SELECT user_name, user_surname FROM user_data WHERE user_id={user_id}')
-    user_details = cursor.fetchone()
-    if user_details:
-        user_name, user_surname = user_details
-        return f"{user_name} {user_surname}"
+    try:
+        cursor.execute(f'SELECT user_name, user_surname FROM user_data WHERE user_id={user_id}')
+        user_details = cursor.fetchone()
+        if user_details:
+            user_name, user_surname = user_details
+            return f"{user_name} {user_surname}"
 
-    else:
-        return None
+        else:
+            return None
+
+    finally:
+        conn.close()
 
 
 def db_get_tasks_for_user(user_id: str) -> Task or list or None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
     query = 'SELECT id, task_name, task_description, importance_level, task_setting_time, task_deadline, ' \
-            'assigned_users_id FROM user_tasks WHERE assigned_users_id LIKE ?'
+            'assigned_users_id, task_status FROM user_tasks WHERE assigned_users_id LIKE ?'
     pattern = f'%{user_id}%'
-    cursor.execute(query, (pattern,))
+    try:
+        cursor.execute(query, (pattern,))
+        task_details_list = cursor.fetchall()
+        if task_details_list:
+            if len(task_details_list) == 1:
+                task_details = task_details_list[0]
+                task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = task_details
+                assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
 
-    task_details_list = cursor.fetchall()
-    if task_details_list:
-        if len(task_details_list) == 1:
-            task_details = task_details_list[0]
-            task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str = task_details
-            assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
+                return [Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list, task_status)]
 
-            return Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list)
+            else:
+                tasks = []
+                for task_details in task_details_list:
+                    task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = task_details
+                    assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
+                    task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list, task_status)
+                    tasks.append(task)
+
+                return tasks
 
         else:
-            tasks = []
-            for task_details in task_details_list:
-                task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str = task_details
-                assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
-                task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list)
-                tasks.append(task)
+            return None
 
-            return tasks
-
-    else:
-        return None
+    finally:
+        conn.close()
 
 
 def db_delete_task(task_id: int) -> None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute(f'DELETE FROM user_tasks WHERE id={task_id}')
+    conn.commit()
+    conn.close()
+
+
+def db_task_status_update(task_id: int, task_status: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE user_tasks SET task_status='{task_status}' WHERE id={task_id}")
     conn.commit()
     conn.close()

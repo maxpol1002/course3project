@@ -1,11 +1,30 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Bot
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, \
-    filters, ConversationHandler
-from db import db_user_data_table_insert, db_get_all_users, db_user_tasks_table_insert, db_get_all_tasks, \
-    db_get_user_data, db_get_tasks_for_user, db_delete_task
-from config import TOKEN
 from datetime import datetime
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ConversationHandler,
+    filters
+)
+
+from db import (
+    db_user_data_table_insert,
+    db_user_tasks_table_insert,
+    db_get_all_users,
+    db_get_all_tasks,
+    db_get_tasks_for_user,
+    db_delete_task,
+    db_get_user_data,
+    db_task_status_update
+)
+
+from config import TOKEN
+
 
 logging.basicConfig(
     filename='bot.logs',
@@ -14,6 +33,7 @@ logging.basicConfig(
 )
 
 TASK_DATA = 0
+REPORT_DATA = 1
 
 
 def get_user_status(user_id) -> int:
@@ -77,7 +97,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if user_status == 1:
         match user_input:
             case "👥 Create task":
-                await update.message.reply_text("List of all users:", reply_markup=build_inline_keyboard(db_get_all_users()))
+                selected_users = context.user_data.get("selected_users", [])
+                await update.message.reply_text("List of all users:", reply_markup=build_inline_keyboard(db_get_all_users(), selected_users))
 
             case "📋 View current tasks":
                 active_tasks = db_get_all_tasks()
@@ -86,15 +107,19 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     for task in active_tasks:
                         await update.message.reply_text(task.print_data())
                 else:
-                    await update.message.reply_text("There are no tasks assigned at this moment.")
+                    await update.message.reply_text("There are no tasks assigned at this moment.", reply_markup=admin_menu_markup)
 
             case "🔢 Sort tasks":
-                sort_inline_keyboard = [InlineKeyboardButton("Importance", callback_data="sort.tasks.importance_level"),
-                                        InlineKeyboardButton("Date of issue", callback_data="sort.tasks.task_setting_time"),
-                                        InlineKeyboardButton("Deadline", callback_data="sort.tasks.task_deadline")]
-                sort_inline_markup = InlineKeyboardMarkup([sort_inline_keyboard])
+                if db_get_all_tasks():
+                    sort_inline_keyboard = [InlineKeyboardButton("Importance", callback_data="sort.tasks.importance_level"),
+                                            InlineKeyboardButton("Date of issue", callback_data="sort.tasks.task_setting_time"),
+                                            InlineKeyboardButton("Deadline", callback_data="sort.tasks.task_deadline")]
+                    sort_inline_markup = InlineKeyboardMarkup([sort_inline_keyboard])
 
-                await update.message.reply_text("Sort tasks by:", reply_markup=sort_inline_markup)
+                    await update.message.reply_text("Sort tasks by:", reply_markup=sort_inline_markup)
+
+                else:
+                    await update.message.reply_text("There are no tasks assigned at this moment.")
 
             case "🛠 Manage tasks":
                 admin_menu = [
@@ -120,18 +145,48 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         match user_input:
             case "📋 View my tasks":
+                user_menu = [
+                    ["📋 View my tasks", "✅ Confirm execution"]
+                    ]
+                user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
                 active_tasks = db_get_tasks_for_user(str(current_user.id))
                 if active_tasks:
-                    await update.message.reply_text("My tasks:")
+                    await update.message.reply_text("My tasks:", reply_markup=user_menu_markup)
+                    idx = 1
                     for task in active_tasks:
-                        await update.message.reply_text(f"Task {task.task_id}: {task.task_name}\n"
-                                                        f"Description: {task.task_description}\n"
-                                                        f"Importance level: {task.importance_level}\n"
-                                                        f"Date of issue: {task.task_setting_time}\n"
-                                                        f"Deadline: {task.task_deadline}\n")
+                        await update.message.reply_text(task.print_for_user(idx))
+                        idx += 1
 
                 else:
                     await update.message.reply_text("You have no tasks at this moment.")
+
+            case "✅ Confirm execution":
+                active_tasks = db_get_tasks_for_user(str(current_user.id))
+                if active_tasks:
+                    await update.message.reply_text("Choose executed task:")
+                    idx = 1
+                    for task in active_tasks:
+                        confirm_task_button = [[InlineKeyboardButton("Confirm", callback_data=f"confirm_task_{task.task_id}_{current_user.id}")]]
+                        await update.message.reply_text(task.print_for_user(idx), reply_markup=InlineKeyboardMarkup(confirm_task_button))
+                        idx += 1
+
+
+async def report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "report_text" not in context.user_data:
+        context.user_data["report_text"] = update.message.text
+        file_choice = [
+            [InlineKeyboardButton("Yes", callback_data=f"report_add_file"),
+             InlineKeyboardButton("No", callback_data=f"report_no_file")]
+        ]
+        await context.bot.send_message(update.effective_user.id, "Your report was sent.")
+        report_text = context.user_data["report_text"]
+        task_id = context.user_data["report_task_id"]
+        user_id = context.user_data["report_user_id"]
+        db_task_status_update(task_id, "pending")
+        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}\n"
+                                                  f"Report text: {report_text}")
+        #await context.bot.send_message(update.effective_user.id, "Do you want to add photos/files?")
+    return ConversationHandler.END
 
 
 async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,12 +201,31 @@ async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return TASK_DATA
 
     elif 'task_importance' not in context.user_data:
-        context.user_data["task_importance"] = update.message.text
+        importance_input = update.message.text.strip()
+        if not importance_input.isdigit() or not (1 <= int(importance_input) <= 5):
+            await context.bot.send_message(update.effective_user.id, "Invalid input. Importance level must be a valid integer between 1 and 5.")
+            await context.bot.send_message(update.effective_user.id, "Input task importance (1-5):")
+            return TASK_DATA
+
+        importance_level = int(importance_input)
+        context.user_data["task_importance"] = importance_level
         await context.bot.send_message(update.effective_user.id, "Input task deadline (YYYY-MM-DD):")
         return TASK_DATA
 
     elif 'task_deadline' not in context.user_data:
-        context.user_data["task_deadline"] = update.message.text
+        deadline_text = update.message.text.strip()
+        try:
+            task_deadline = datetime.strptime(deadline_text, '%Y-%m-%d')
+        except ValueError:
+            await context.bot.send_message(update.effective_user.id, "Invalid date format. Please use YYYY-MM-DD:")
+            return TASK_DATA
+
+        if task_deadline < datetime.now():
+            await context.bot.send_message(update.effective_user.id, "Deadline must be in the future. Please enter again:")
+            return TASK_DATA
+
+        context.user_data["task_deadline"] = task_deadline
+
         task_name = context.user_data["task_name"]
         task_description = context.user_data["task_description"]
         importance_level = context.user_data["task_importance"]
@@ -159,14 +233,16 @@ async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_deadline = context.user_data["task_deadline"]
         selected_users_list = context.user_data["selected_users"]
         selected_users = ','.join(map(str, selected_users_list))
+        task_status = "incomplete"
 
-    db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline, selected_users)
-    await update.message.reply_text("Task created successfully!")
-    for user_id in selected_users_list:
-        await context.bot.send_message(user_id, "Hello, you have new task!")
-    context.user_data.clear()
+        db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
+                                   selected_users, task_status)
+        await update.message.reply_text("Task created successfully!")
+        for user_id in selected_users_list:
+            await context.bot.send_message(user_id, "Hello, you have a new task!")
 
-    return ConversationHandler.END
+        context.user_data.clear()
+        return ConversationHandler.END
 
 
 async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,14 +279,56 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(query.message.chat.id, f"Task {task_id} was successfully deleted.")
         await query.answer()
 
+    elif query.data.startswith("confirm_task"):
+        task_id = int(query.data.split("_")[2])
+        user_id = int(query.data.split("_")[3])
+        rep_choice = [
+            [InlineKeyboardButton("Yes", callback_data=f"send_report_{task_id}_{user_id}"),
+             InlineKeyboardButton("No", callback_data=f"no_report_{task_id}_{user_id}")]
+        ]
+        rep_choice_markup = InlineKeyboardMarkup(rep_choice)
+        await context.bot.send_message(query.message.chat.id, f"Task №{task_id} marked as completed, do you want to add a report?", reply_markup=rep_choice_markup)
+        await query.answer()
+
+    elif query.data.startswith("send_report"):
+        task_id = int(query.data.split("_")[2])
+        user_id = int(query.data.split("_")[3])
+        context.user_data["report_task_id"] = task_id
+        context.user_data["report_user_id"] = user_id
+        await context.bot.send_message(query.message.chat.id, f"Add description to your report.")
+        await query.answer()
+        return REPORT_DATA
+
+    elif query.data.startswith("no_report"):
+        task_id = int(query.data.split("_")[2])
+        user_id = int(query.data.split("_")[3])
+        db_task_status_update(task_id, "pending")
+        await context.bot.send_message(query.message.chat.id, f"Thanks, your task is waiting for approval.")
+        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}")
+        await query.answer()
+
+    elif query.data == "report_add_file":
+        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.")
+        await query.answer()
+        return REPORT_DATA
+
+    elif query.data == "report_no_file":
+        await context.bot.send_message(query.message.chat.id, "Your report was sent.")
+        report_text = context.user_data["report_text"]
+        task_id = context.user_data["report_task_id"]
+        user_id = context.user_data["report_user_id"]
+        db_task_status_update(task_id, "pending")
+        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}\n"
+                                                  f"Report text: {report_text}")
+        await query.answer()
+
 
 if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(callback_data_handler)],
         states={
-            TASK_DATA: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)
-            ],
+            TASK_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)],
+            REPORT_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_handler)]
         },
         fallbacks=[]
     )
