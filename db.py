@@ -125,3 +125,23 @@ def db_task_status_update(task_id: int, task_status: str) -> None:
     cursor.execute(f"UPDATE user_tasks SET task_status='{task_status}' WHERE id={task_id}")
     conn.commit()
     conn.close()
+
+
+def db_report_table_insert(user_id: int, task_id: int, send_time: datetime, report_text: str, report_files: int) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO task_reports (user_id, task_id, send_time, report_text, report_files) '
+                   'VALUES (?, ?, ?, ?, ?)', (user_id, task_id, send_time, report_text, report_files))
+
+    conn.commit()
+    conn.close()
+
+
+def db_files_table_insert(report_id: int, file_id: str, file_type: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO file_attachments (report_id, file_id, file_type) VALUES (?, ?, ?)',
+                   (report_id, file_id, file_type))
+
+    conn.commit()
+    conn.close()

@@ -1,7 +1,17 @@
 import logging
+
 from datetime import datetime
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    InputMediaPhoto,
+    InputMediaDocument,
+    InputMediaVideo
+)
+
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -20,7 +30,8 @@ from db import (
     db_get_tasks_for_user,
     db_delete_task,
     db_get_user_data,
-    db_task_status_update
+    db_task_status_update,
+    db_report_table_insert
 )
 
 from config import TOKEN
@@ -34,12 +45,23 @@ logging.basicConfig(
 
 TASK_DATA = 0
 REPORT_DATA = 1
+REPORT_FILES = 2
 
 
 def get_user_status(user_id) -> int:
     if user_id == 648380859:
         return 1
     return 0
+
+
+def get_current_datetime_str():
+    # Get the current datetime
+    current_datetime = datetime.now()
+
+    # Format the datetime as required (DD-MM-YYYY:HH:mm)
+    formatted_datetime_str = current_datetime.strftime('%d-%m-%Y:%H:%M')
+
+    return formatted_datetime_str
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -170,22 +192,90 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         await update.message.reply_text(task.print_for_user(idx), reply_markup=InlineKeyboardMarkup(confirm_task_button))
                         idx += 1
 
+                else:
+                    await update.message.reply_text("You have no tasks at this moment.")
 
-async def report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "report_text" not in context.user_data:
         context.user_data["report_text"] = update.message.text
         file_choice = [
             [InlineKeyboardButton("Yes", callback_data=f"report_add_file"),
              InlineKeyboardButton("No", callback_data=f"report_no_file")]
         ]
-        await context.bot.send_message(update.effective_user.id, "Your report was sent.")
-        report_text = context.user_data["report_text"]
-        task_id = context.user_data["report_task_id"]
-        user_id = context.user_data["report_user_id"]
-        db_task_status_update(task_id, "pending")
-        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}\n"
-                                                  f"Report text: {report_text}")
-        #await context.bot.send_message(update.effective_user.id, "Do you want to add photos/files?")
+        markup = InlineKeyboardMarkup(file_choice)
+        await update.message.reply_text("Do you want to add photos/files?", reply_markup=markup)
+        return ConversationHandler.END
+
+
+async def report_files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    report_docs = context.user_data.setdefault("report_docs", [])
+    report_photos = context.user_data.setdefault("report_photos", [])
+    report_videos = context.user_data.setdefault("report_videos", [])
+    if update.message.photo:
+        photo_id = update.message.photo[-1].file_id
+        report_photos.append(InputMediaPhoto(media=photo_id))
+        print(photo_id)
+        await update.message.reply_text("Photo received. You can add more files or proceed.")
+
+    elif update.message.document:
+        document_id = update.message.document.file_id
+        report_docs.append(InputMediaDocument(media=document_id))
+        await update.message.reply_text("Document received. You can add more files or proceed.")
+
+    elif update.message.video:
+        video_id = update.message.video.file_id
+        report_videos.append(InputMediaVideo(media=video_id))
+        await update.message.reply_text("Video received. You can add more files or proceed.")
+
+    else:
+        await update.message.reply_text("Wrong file type.")
+
+    context.user_data["report_photos"] = report_photos
+    context.user_data["report_docs"] = report_docs
+    context.user_data["report_videos"] = report_videos
+
+
+async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    report_text = context.user_data["report_text"]
+    report_photos = context.user_data["report_photos"]
+    report_docs = context.user_data["report_docs"]
+    report_videos = context.user_data["report_videos"]
+    task_id = context.user_data["report_task_id"]
+    user_id = context.user_data["report_user_id"]
+    db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, 1)
+    user_menu = [
+        ["📋 View my tasks", "✅ Confirm execution"]
+    ]
+    await context.bot.send_message(648380859, f"You have new report for task №{task_id} from {db_get_user_data(user_id)}\n"
+                                              f"Report text: {report_text}")
+    if report_photos:
+        await context.bot.send_message(648380859, "Added photos:")
+        if len(report_photos) == 1:
+            await context.bot.send_photo(648380859, report_photos[0])
+
+        else:
+            await context.bot.send_media_group(648380859, report_photos)
+
+    if report_docs:
+        await context.bot.send_message(648380859, "Added documents:")
+        if len(report_docs) == 1:
+            await context.bot.send_document(648380859, report_docs[0])
+
+        else:
+            await context.bot.send_media_group(648380859, report_docs)
+
+    if report_videos:
+        await context.bot.send_message(648380859, "Added videos:")
+        if len(report_videos) == 1:
+            await context.bot.send_video(648380859, report_videos[0])
+
+        else:
+            await context.bot.send_media_group(648380859, report_videos)
+
+    await context.bot.send_message(user_id, "Report has been sent.", reply_markup=ReplyKeyboardMarkup(user_menu, resize_keyboard=True))
+
+    context.user_data.clear()
     return ConversationHandler.END
 
 
@@ -302,24 +392,31 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("no_report"):
         task_id = int(query.data.split("_")[2])
         user_id = int(query.data.split("_")[3])
+        db_report_table_insert(user_id, task_id, get_current_datetime_str(), "No description", 0)
         db_task_status_update(task_id, "pending")
         await context.bot.send_message(query.message.chat.id, f"Thanks, your task is waiting for approval.")
         await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}")
         await query.answer()
 
     elif query.data == "report_add_file":
-        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.")
+        user_menu = [
+            ["👌 Done"]
+        ]
+        markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
+        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.", reply_markup=markup)
         await query.answer()
-        return REPORT_DATA
+        return REPORT_FILES
 
     elif query.data == "report_no_file":
         await context.bot.send_message(query.message.chat.id, "Your report was sent.")
         report_text = context.user_data["report_text"]
         task_id = context.user_data["report_task_id"]
         user_id = context.user_data["report_user_id"]
+        db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, 0)
         db_task_status_update(task_id, "pending")
         await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}\n"
                                                   f"Report text: {report_text}")
+        context.user_data.clear()
         await query.answer()
 
 
@@ -328,7 +425,9 @@ if __name__ == '__main__':
         entry_points=[CallbackQueryHandler(callback_data_handler)],
         states={
             TASK_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)],
-            REPORT_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_handler)]
+            REPORT_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_text_handler)],
+            REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, report_files_handler),
+                           MessageHandler(filters.Regex(r'👌\s*Done'), send_report)]
         },
         fallbacks=[]
     )
