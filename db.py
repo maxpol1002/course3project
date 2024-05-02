@@ -3,6 +3,8 @@ import sqlite3
 
 from User import User
 from Task import Task
+from Report import Report
+from File import File
 
 
 def db_user_data_table_insert(user_id: int, user_name: str, user_surname: str, username: str, user_status: int) -> None:
@@ -127,11 +129,11 @@ def db_task_status_update(task_id: int, task_status: str) -> None:
     conn.close()
 
 
-def db_report_table_insert(user_id: int, task_id: int, send_time: datetime, report_text: str, report_files: int) -> None:
+def db_report_table_insert(user_id: int, task_id: int, send_time: datetime, report_text: str) -> None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO task_reports (user_id, task_id, send_time, report_text, report_files) '
-                   'VALUES (?, ?, ?, ?, ?)', (user_id, task_id, send_time, report_text, report_files))
+    cursor.execute('INSERT OR IGNORE INTO task_reports (user_id, task_id, send_time, report_text) '
+                   'VALUES (?, ?, ?, ?)', (user_id, task_id, send_time, report_text))
 
     conn.commit()
     conn.close()
@@ -145,3 +147,49 @@ def db_files_table_insert(report_id: int, file_id: str, file_type: str) -> None:
 
     conn.commit()
     conn.close()
+
+
+def db_get_report_id(user_id: int, task_id: int) -> int:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f'SELECT id FROM task_reports WHERE user_id={user_id} AND task_id={task_id}')
+    report_id = cursor.fetchone()
+    conn.close()
+    return report_id[0]
+
+
+def db_get_reports(status: str):
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f'''
+        SELECT tr.id, tr.user_id, tr.task_id, tr.send_time, tr.report_text, tr.report_status 
+        GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details 
+        FROM task_reports AS tr
+        LEFT JOIN file_attachments AS fa ON tr.id = fa.report_id
+        WHERE tr.report_status={status}
+        GROUP BY tr.id
+    ''')
+    reports = []
+    rows = cursor.fetchall()
+    if rows:
+        for row in rows:
+            report_id, user_id, task_id, send_time, report_text, report_status, file_details = row
+            if file_details:
+                file_details_list = file_details.split(",")
+                files_list = []
+                for file in file_details_list:
+                    file_id, file_type = file.split(":")
+                    files_list.append(File(file_id, file_type))
+
+            report = Report(report_id, user_id, task_id, send_time, report_text, report_status, files_list)
+            reports.append(report)
+
+        return reports
+
+    else:
+        return None
+
+
+
+
+
