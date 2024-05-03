@@ -22,7 +22,7 @@ class Report:
             f"Executor: {db.db_get_user_data(user_id=self.user_id)}\n"
             f"Time sent: {self.send_time}\n"
             f"Report text: {self.report_text}\n"
-            f"Report status: {self.report_status}"
+            f"Report status: {self.report_status}\n"
             "======================================"
 
         )

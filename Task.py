@@ -36,7 +36,6 @@ class Task:
             f"Importance level: {self.importance_level}\n"
             f"Date of issue: {self.task_setting_time}\n"
             f"Deadline: {self.task_deadline}\n"
-            f"Status: {self.task_status}"
         )
 
         return data
