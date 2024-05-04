@@ -81,10 +81,13 @@ def build_inline_calendar(current_month, current_year) -> InlineKeyboardMarkup:
     cal.append([InlineKeyboardButton(f"{month_name}", callback_data="do_nothing")])
     month = []
     for i in range(days_in_month):
-        month.append(InlineKeyboardButton(f"{i + 1}", callback_data=f"cal_{month_name}_{i + 1}"))
+        cb_day = f"0{i + 1}" if i + 1 < 10 else f"{i + 1}"
+        cb_month = f"0{current_month}" if current_month < 10 else f"{current_month}"
+        month.append(InlineKeyboardButton(f"{i + 1}", callback_data=f"cal_{cb_day}_{cb_month}_{current_year}"))
         if len(month) == 6:
             cal.append(month)
             month = []
+
     cal.append(month)
     cal.append([
         InlineKeyboardButton("◀️", callback_data=f"month_{current_month - 1}"),
@@ -175,9 +178,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user_status == 1:
         await update.message.reply_text(f"Hello, {user_name}, your status is: {user_status}",
                                         reply_markup=admin_menu_markup)
-
-        await update.message.reply_text("Calendar:", reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
-        context.user_data["year"] = datetime.now().year
 
     else:
         await update.message.reply_text(f"Hello unknown user, {user.first_name} {user.last_name}, "
@@ -413,40 +413,10 @@ async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         importance_level = int(importance_input)
         context.user_data["task_importance"] = importance_level
-        await context.bot.send_message(update.effective_user.id, "Input task deadline (YYYY-DD-MM):")
-        return TASK_DATA
+        await context.bot.send_message(update.effective_user.id, "Select task deadline:",
+                                       reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
+        context.user_data["year"] = datetime.now().year
 
-    elif 'task_deadline' not in context.user_data:
-        deadline_text = update.message.text.strip()
-        try:
-            task_deadline = datetime.strptime(deadline_text, '%Y-%d-%m')
-        except ValueError:
-            await context.bot.send_message(update.effective_user.id, "Invalid date format. Please use YYYY-MM-DD:")
-            return TASK_DATA
-
-        if task_deadline < datetime.now():
-            await context.bot.send_message(update.effective_user.id,
-                                           "Deadline must be in the future. Please enter again:")
-            return TASK_DATA
-
-        context.user_data["task_deadline"] = task_deadline
-
-        task_name = context.user_data["task_name"]
-        task_description = context.user_data["task_description"]
-        importance_level = context.user_data["task_importance"]
-        task_setting_time = get_current_datetime_str()
-        task_deadline = context.user_data["task_deadline"]
-        selected_users_list = context.user_data["selected_users"]
-        selected_users = ','.join(map(str, selected_users_list))
-        task_status = "incomplete"
-
-        db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
-                                   selected_users, task_status)
-        await update.message.reply_text("Task created successfully!")
-        for user_id in selected_users_list:
-            await context.bot.send_message(user_id, "Hello, you have a new task!")
-
-        context.user_data.clear()
         return ConversationHandler.END
 
 
@@ -556,8 +526,37 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
             year -= 1
             month_index = 12
 
-        context.user_data["year"] = year
-        await query.edit_message_reply_markup(build_inline_calendar(month_index, year))
+        if year < datetime.now().year or (year == datetime.now().year and month_index < datetime.now().month):
+            context.user_data["year"] = datetime.now().year
+            await query.edit_message_reply_markup(build_inline_calendar(datetime.now().month, datetime.now().year))
+
+        else:
+            context.user_data["year"] = year
+            await query.edit_message_reply_markup(build_inline_calendar(month_index, year))
+
+        await query.answer()
+
+    elif query.data.startswith("cal"):
+        day = query.data.split("_")[1]
+        month = query.data.split("_")[2]
+        year = query.data.split("_")[3]
+        context.user_data["task_deadline"] = f"{day}-{month}-{year}"
+        task_name = context.user_data["task_name"]
+        task_description = context.user_data["task_description"]
+        importance_level = context.user_data["task_importance"]
+        task_setting_time = get_current_datetime_str()
+        task_deadline = context.user_data["task_deadline"]
+        selected_users_list = context.user_data["selected_users"]
+        selected_users = ','.join(map(str, selected_users_list))
+        task_status = "incomplete"
+
+        db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
+                                   selected_users, task_status)
+        await context.bot.send_message(query.message.chat.id, "Task created successfully!")
+        for user_id in selected_users_list:
+            await context.bot.send_message(user_id, "Hello, you have a new task!")
+
+        context.user_data.clear()
         await query.answer()
 
 
