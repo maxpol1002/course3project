@@ -1,6 +1,7 @@
 import datetime
 import sqlite3
 
+from DailyReport import DailyReport
 from User import User
 from Task import Task
 from Report import Report
@@ -157,11 +158,11 @@ def db_report_status_update(report_id: int, report_status: str) -> None:
     conn.close()
 
 
-def db_files_table_insert(report_id: int, file_id: str, file_type: str) -> None:
+def db_files_table_insert(report_id: int, file_id: str, file_type: str, task_type: str) -> None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO file_attachments (report_id, file_id, file_type) VALUES (?, ?, ?)',
-                   (report_id, file_id, file_type))
+    cursor.execute('INSERT OR IGNORE INTO file_attachments (report_id, file_id, file_type, task_type) VALUES (?, ?, ?, ?)',
+                   (report_id, file_id, file_type, task_type))
 
     conn.commit()
     conn.close()
@@ -176,6 +177,49 @@ def db_get_report_id(user_id: int, task_id: int) -> int:
     return report_id[0]
 
 
+def db_get_daily_rep_id(user_id: int, report_desc: str) -> int:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT id FROM daily_reports WHERE user_id={user_id} AND report_desc='{report_desc}'")
+    report_id = cursor.fetchone()
+    conn.close()
+    return report_id[0]
+
+
+def db_get_daily_reports():
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT dr.id, dr.user_id, dr.report_name, dr.report_desc, dr.time_sent,
+        GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+        FROM daily_reports as dr
+        LEFT JOIN file_attachments AS fa ON dr.id = fa.report_id AND fa.task_type = 'daily_report'
+        WHERE fa.report_id IS NULL OR fa.task_type = 'daily_report'
+        GROUP BY dr.id
+    ''')
+    daily_reports = []
+    rows = cursor.fetchall()
+    if rows:
+        for row in rows:
+            report_id, user_id, report_name, report_desc, send_time, file_details = row
+            if file_details:
+                file_details_list = file_details.split(",")
+                files_list = []
+                for file in file_details_list:
+                    file_id, file_type = file.split(":")
+                    files_list.append(File(file_id, file_type))
+
+                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, files_list)
+            else:
+                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, None)
+            daily_reports.append(report)
+
+        return daily_reports
+
+    else:
+        return None
+
+
 def db_get_reports(status: str):
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -183,8 +227,8 @@ def db_get_reports(status: str):
         SELECT tr.id, tr.user_id, tr.task_id, tr.send_time, tr.report_text, tr.report_status,
         GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details 
         FROM task_reports AS tr
-        LEFT JOIN file_attachments AS fa ON tr.id = fa.report_id
-        WHERE tr.report_status='{status}'
+        LEFT JOIN file_attachments AS fa ON tr.id = fa.report_id AND fa.task_type = 'task_report'
+        WHERE tr.report_status = '{status}' AND (fa.report_id IS NULL OR fa.task_type = 'task_report')
         GROUP BY tr.id
     ''')
     reports = []
@@ -208,6 +252,26 @@ def db_get_reports(status: str):
 
     else:
         return None
+
+
+def db_daily_report_insert(user_id: int, report_name: str, report_desc: str, time_sent: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO daily_reports (user_id, report_name, report_desc, time_sent)"
+        "VALUES (?, ?, ?, ?)", (user_id, report_name, report_desc, time_sent)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_task_name(task_id: int) -> str:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT task_name FROM user_tasks WHERE id='{task_id}'")
+    task_name = cursor.fetchone()
+    conn.close()
+    return task_name[0]
 
 
 

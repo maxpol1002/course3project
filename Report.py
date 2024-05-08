@@ -18,7 +18,7 @@ class Report:
         data = (
             "======================================\n"
             f"Report ID: {self.report_id}\n"
-            f"Task ID: {self.task_id}\n"
+            f"Task name: {db.get_task_name(self.task_id)}\n"
             f"Executor: {db.db_get_user_data(user_id=self.user_id)}\n"
             f"Time sent: {self.send_time}\n"
             f"Report text: {self.report_text}\n"
