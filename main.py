@@ -38,7 +38,8 @@ from db import (
     db_report_status_update,
     db_daily_report_insert,
     db_get_daily_rep_id,
-    db_get_daily_reports
+    db_get_daily_reports,
+    db_get_task_name
 )
 
 from inline_keyboards import build_inline_calendar, build_inline_keyboard
@@ -56,6 +57,7 @@ REPORT_DATA = 1
 REPORT_FILES = 2
 DAILY_REPORT = 3
 DAILY_REPORT_FILES = 4
+TASK_FILES = 5
 
 
 def get_user_status(user_id) -> int:
@@ -71,40 +73,44 @@ def get_current_datetime_str():
     return formatted_datetime_str
 
 
+async def report_send_media(report, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if report.get_media():
+        report_photos, report_videos, report_docs = report.get_media()
+        if report_photos:
+            if len(report_photos) == 1:
+                await context.bot.send_photo(648380859, report_photos[0], caption="Added photo ⬆️")
+
+            else:
+                photos_list = []
+                for photo_id in report_photos:
+                    photos_list.append(InputMediaPhoto(media=photo_id))
+                await context.bot.send_media_group(648380859, photos_list, caption="Added photos ⬆️")
+
+        if report_docs:
+            if len(report_docs) == 1:
+                await context.bot.send_document(648380859, report_docs[0], caption="Added document ⬆️")
+
+            else:
+                docs_list = []
+                for doc_id in report_docs:
+                    docs_list.append(InputMediaDocument(media=doc_id))
+                await context.bot.send_media_group(648380859, docs_list, caption="⬇️ Added documents ⬆️")
+
+        if report_videos:
+            if len(report_videos) == 1:
+                await context.bot.send_video(648380859, report_videos[0], caption="Added video ⬆️")
+
+            else:
+                videos_list = []
+                for vid_id in report_videos:
+                    videos_list.append(InputMediaVideo(media=vid_id))
+                await context.bot.send_media_group(648380859, videos_list, caption="Added videos ⬆️")
+
+
 async def print_daily_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, daily_reports) -> None:
     for report in daily_reports:
         await update.message.reply_text(report.create_report_text())
-        if report.get_media():
-            report_photos, report_videos, report_docs = report.get_media()
-            if report_photos:
-                if len(report_photos) == 1:
-                    await context.bot.send_photo(648380859, report_photos[0], caption="Added photo ⬆️")
-
-                else:
-                    photos_list = []
-                    for photo_id in report_photos:
-                        photos_list.append(InputMediaPhoto(media=photo_id))
-                    await context.bot.send_media_group(648380859, photos_list, caption="Added photos ⬆️")
-
-            if report_docs:
-                if len(report_docs) == 1:
-                    await context.bot.send_document(648380859, report_docs[0], caption="Added document ⬆️")
-
-                else:
-                    docs_list = []
-                    for doc_id in report_docs:
-                        docs_list.append(InputMediaDocument(media=doc_id))
-                    await context.bot.send_media_group(648380859, docs_list, caption="⬇️ Added documents ⬆️")
-
-            if report_videos:
-                if len(report_videos) == 1:
-                    await context.bot.send_video(648380859, report_videos[0], caption="Added video ⬆️")
-
-                else:
-                    videos_list = []
-                    for vid_id in report_videos:
-                        videos_list.append(InputMediaVideo(media=vid_id))
-                    await context.bot.send_media_group(648380859, videos_list, caption="Added videos ⬆️")
+        await report_send_media(report, context)
 
 
 async def print_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, reports) -> None:
@@ -122,37 +128,7 @@ async def print_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, repo
         else:
             await update.message.reply_text(report.create_report_text())
 
-        if report.get_media():
-            report_photos, report_videos, report_docs = report.get_media()
-            if report_photos:
-                if len(report_photos) == 1:
-                    await context.bot.send_photo(648380859, report_photos[0], caption="Added photo ⬆️")
-
-                else:
-                    photos_list = []
-                    for photo_id in report_photos:
-                        photos_list.append(InputMediaPhoto(media=photo_id))
-                    await context.bot.send_media_group(648380859, photos_list, caption="Added photos ⬆️")
-
-            if report_docs:
-                if len(report_docs) == 1:
-                    await context.bot.send_document(648380859, report_docs[0], caption="Added document ⬆️")
-
-                else:
-                    docs_list = []
-                    for doc_id in report_docs:
-                        docs_list.append(InputMediaDocument(media=doc_id))
-                    await context.bot.send_media_group(648380859, docs_list, caption="⬇️ Added documents ⬆️")
-
-            if report_videos:
-                if len(report_videos) == 1:
-                    await context.bot.send_video(648380859, report_videos[0], caption="Added video ⬆️")
-
-                else:
-                    videos_list = []
-                    for vid_id in report_videos:
-                        videos_list.append(InputMediaVideo(media=vid_id))
-                    await context.bot.send_media_group(648380859, videos_list, caption="Added videos ⬆️")
+        await report_send_media(report, context)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -290,26 +266,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         match user_input:
             case "📋 View active tasks":
                 user_menu = [
-                    ["📋 View active tasks", "✅ Confirm execution", "📜 View completed tasks"],
+                    ["📋 View active tasks", "📜 View completed tasks"],
                     ["🗓 Send daily report"]
                 ]
                 user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
                 active_tasks = db_get_tasks_for_user(str(current_user.id), "incomplete")
                 if active_tasks:
                     await update.message.reply_text("My tasks:", reply_markup=user_menu_markup)
-                    idx = 1
-                    for task in active_tasks:
-                        await update.message.reply_text(task.print_for_user(idx))
-                        idx += 1
-
-                else:
-                    await update.message.reply_text("You have no active tasks at this moment.",
-                                                    reply_markup=user_menu_markup)
-
-            case "✅ Confirm execution":
-                active_tasks = db_get_tasks_for_user(str(current_user.id), "incomplete")
-                if active_tasks:
-                    await update.message.reply_text("Choose executed task:")
                     idx = 1
                     for task in active_tasks:
                         confirm_task_button = [[InlineKeyboardButton("Confirm",
@@ -319,7 +282,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         idx += 1
 
                 else:
-                    await update.message.reply_text("You have no tasks at this moment.")
+                    await update.message.reply_text("You have no active tasks at this moment.",
+                                                    reply_markup=user_menu_markup)
 
             case "📜 View completed tasks":
                 completed_tasks = db_get_tasks_for_user(str(current_user.id), "completed")
@@ -436,11 +400,11 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending")
     db_task_status_update(task_id, "pending")
     user_menu = [
-        ["📋 View active tasks", "✅ Confirm execution", "📜 View completed tasks"],
+        ["📋 View active tasks", "📜 View completed tasks"],
         ["🗓 Send daily report"]
     ]
     await context.bot.send_message(648380859,
-                                   f"You have new report for task №{task_id} from {db_get_user_data(user_id)}\n"
+                                   f"You have new report for task: {db_get_task_name(task_id)} from {db_get_user_data(user_id)}\n"
                                    f"Report text: {report_text}")
     if report_photos:
         for photo in report_photos:
@@ -537,7 +501,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         ]
         rep_choice_markup = InlineKeyboardMarkup(rep_choice)
         await context.bot.send_message(query.message.chat.id,
-                                       f"Task №{task_id} marked as completed, do you want to add report?",
+                                       f"Task: {db_get_task_name(task_id)} marked as completed, do you want to add report?",
                                        reply_markup=rep_choice_markup)
         await query.answer()
 
@@ -556,7 +520,8 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         db_report_table_insert(user_id, task_id, get_current_datetime_str(), "No description", "pending")
         db_task_status_update(task_id, "pending")
         await context.bot.send_message(query.message.chat.id, f"Thanks, your report is waiting for approval.")
-        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}")
+        await context.bot.send_message(648380859,
+                                       f"{db_get_user_data(user_id)} completed task: {db_get_task_name(task_id)}")
         await query.answer()
 
     elif query.data == "report_add_file":
@@ -575,7 +540,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         user_id = context.user_data["report_user_id"]
         db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending")
         db_task_status_update(task_id, "pending")
-        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task №{task_id}\n"
+        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task: {db_get_task_name(task_id)}\n"
                                                   f"Report text: {report_text}")
         context.user_data.clear()
         await query.answer()
@@ -587,7 +552,8 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         db_task_status_update(task_id, "completed")
         db_report_status_update(report_id, "approved")
         await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is approved.")
-        await context.bot.send_message(user_id, "Your report was approved. Good job!")
+        await context.bot.send_message(user_id,
+                                       f"Your report for task {db_get_task_name(task_id)} was approved. Good job!")
         await query.answer()
 
     elif query.data.startswith("month"):
@@ -660,7 +626,8 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         db_task_status_update(task_id, "incomplete")
         db_report_status_update(report_id, "dismissed")
         await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is dismissed.")
-        await context.bot.send_message(user_id, "Your report was dismissed. Redo the task.")
+        await context.bot.send_message(user_id,
+                                       f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.")
         await query.answer()
 
 if __name__ == '__main__':

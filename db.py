@@ -265,7 +265,7 @@ def db_daily_report_insert(user_id: int, report_name: str, report_desc: str, tim
     conn.close()
 
 
-def get_task_name(task_id: int) -> str:
+def db_get_task_name(task_id: int) -> str:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute(f"SELECT task_name FROM user_tasks WHERE id='{task_id}'")

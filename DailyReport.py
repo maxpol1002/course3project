@@ -1,28 +1,25 @@
+import db
 from File import File
 
-import db
 
-
-class Report:
-    def __init__(self, report_id: int, user_id: int, task_id: int, send_time: str, report_text: str, report_status: str,
+class DailyReport:
+    def __init__(self, report_id: int, user_id: int, report_name: str, report_desc: str, send_time: str,
                  files: list[File] or None):
         self.report_id = report_id
         self.user_id = user_id
-        self.task_id = task_id
+        self.report_name = report_name
+        self.report_desc = report_desc
         self.send_time = send_time
-        self.report_text = report_text
-        self.report_status = report_status
         self.files = files
 
     def create_report_text(self):
         data = (
             "======================================\n"
             f"Report ID: {self.report_id}\n"
-            f"Task name: {db.db_get_task_name(self.task_id)}\n"
-            f"Executor: {db.db_get_user_data(user_id=self.user_id)}\n"
+            f"Report from: {db.db_get_user_data(user_id=self.user_id)}\n"
+            f"Report name: {self.report_name}\n"
+            f"Report text: {self.report_desc}\n"
             f"Time sent: {self.send_time}\n"
-            f"Report text: {self.report_text}\n"
-            f"Report status: {self.report_status}\n"
             "======================================"
 
         )
@@ -49,4 +46,3 @@ class Report:
 
         else:
             return None
-
