@@ -39,7 +39,8 @@ from db import (
     db_daily_report_insert,
     db_get_daily_rep_id,
     db_get_daily_reports,
-    db_get_task_name
+    db_get_task_name,
+    db_get_task_id
 )
 
 from inline_keyboards import build_inline_calendar, build_inline_keyboard
@@ -73,44 +74,50 @@ def get_current_datetime_str():
     return formatted_datetime_str
 
 
-async def report_send_media(report, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def send_media(report, user_id, context: ContextTypes.DEFAULT_TYPE) -> None:
     if report.get_media():
         report_photos, report_videos, report_docs = report.get_media()
         if report_photos:
             if len(report_photos) == 1:
-                await context.bot.send_photo(648380859, report_photos[0], caption="Added photo ⬆️")
+                await context.bot.send_photo(user_id, report_photos[0], caption="Added photo ⬆️")
 
             else:
                 photos_list = []
                 for photo_id in report_photos:
                     photos_list.append(InputMediaPhoto(media=photo_id))
-                await context.bot.send_media_group(648380859, photos_list, caption="Added photos ⬆️")
+                await context.bot.send_media_group(user_id, photos_list, caption="Added photos ⬆️")
 
         if report_docs:
             if len(report_docs) == 1:
-                await context.bot.send_document(648380859, report_docs[0], caption="Added document ⬆️")
+                await context.bot.send_document(user_id, report_docs[0], caption="Added document ⬆️")
 
             else:
                 docs_list = []
                 for doc_id in report_docs:
                     docs_list.append(InputMediaDocument(media=doc_id))
-                await context.bot.send_media_group(648380859, docs_list, caption="⬇️ Added documents ⬆️")
+                await context.bot.send_media_group(user_id, docs_list, caption="⬇️ Added documents ⬆️")
 
         if report_videos:
             if len(report_videos) == 1:
-                await context.bot.send_video(648380859, report_videos[0], caption="Added video ⬆️")
+                await context.bot.send_video(user_id, report_videos[0], caption="Added video ⬆️")
 
             else:
                 videos_list = []
                 for vid_id in report_videos:
                     videos_list.append(InputMediaVideo(media=vid_id))
-                await context.bot.send_media_group(648380859, videos_list, caption="Added videos ⬆️")
+                await context.bot.send_media_group(user_id, videos_list, caption="Added videos ⬆️")
 
 
 async def print_daily_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, daily_reports) -> None:
     for report in daily_reports:
         await update.message.reply_text(report.create_report_text())
-        await report_send_media(report, context)
+        await send_media(report, 648380859, context)
+
+
+async def print_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, tasks) -> None:
+    for task in tasks:
+        await update.message.reply_text(task.print_data())
+        await send_media(task, 648380859, context)
 
 
 async def print_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, reports) -> None:
@@ -128,7 +135,7 @@ async def print_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, repo
         else:
             await update.message.reply_text(report.create_report_text())
 
-        await report_send_media(report, context)
+        await send_media(report, 648380859, context)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -178,8 +185,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 active_tasks = db_get_all_tasks()
                 if active_tasks:
                     await update.message.reply_text("Active tasks:", reply_markup=admin_menu_markup)
-                    for task in active_tasks:
-                        await update.message.reply_text(task.print_data())
+                    await print_tasks(update, context, active_tasks)
                 else:
                     await update.message.reply_text("There are no tasks assigned at this moment.",
                                                     reply_markup=admin_menu_markup)
@@ -202,7 +208,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("There are no pending reports at this moment.")
 
             case "✔️ Approved reports":
-                approved_reports = db_get_reports("approved")
+                approved_reports = db_get_reports(status="approved")
                 if approved_reports:
                     await update.message.reply_text("Approved reports:")
                     await print_reports(update, context, approved_reports)
@@ -279,6 +285,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                                      callback_data=f"confirm_task_{task.task_id}_{current_user.id}")]]
                         await update.message.reply_text(task.print_for_user(idx),
                                                         reply_markup=InlineKeyboardMarkup(confirm_task_button))
+                        await send_media(task, current_user.id, context)
                         idx += 1
 
                 else:
@@ -314,7 +321,7 @@ async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
 
-async def report_files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report_docs = context.user_data.setdefault("report_docs", [])
     report_photos = context.user_data.setdefault("report_photos", [])
     report_videos = context.user_data.setdefault("report_videos", [])
@@ -420,6 +427,47 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(user_id, "Report has been sent.",
                                    reply_markup=ReplyKeyboardMarkup(user_menu, resize_keyboard=True))
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    task_name = context.user_data["task_name"]
+    task_description = context.user_data["task_description"]
+    importance_level = context.user_data["task_importance"]
+    task_setting_time = get_current_datetime_str()
+    task_deadline = context.user_data["task_deadline"]
+    selected_users_list = context.user_data["selected_users"]
+    selected_users = ','.join(map(str, selected_users_list))
+    task_status = "incomplete"
+    db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
+                               selected_users, task_status)
+    task_photos = context.user_data["report_photos"]
+    task_docs = context.user_data["report_docs"]
+    task_videos = context.user_data["report_videos"]
+
+    if task_photos:
+        for photo in task_photos:
+            db_files_table_insert(db_get_task_id(task_name, task_description), photo, "photo", "task")
+
+    if task_docs:
+        for document in task_docs:
+            db_files_table_insert(db_get_task_id(task_name, task_description), document, "document", "task")
+
+    if task_videos:
+        for video in task_videos:
+            db_files_table_insert(db_get_task_id(task_name, task_description), video, "video", "task")
+
+    admin_menu = [
+        ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"],
+        ["📊 View reports", "🗓 View daily reports"]
+    ]
+    admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
+
+    await context.bot.send_message(648380859, "Task created successfully!", reply_markup=admin_menu_markup)
+    for user_id in selected_users_list:
+        await context.bot.send_message(user_id, "Hello, you have a new task!")
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -582,6 +630,24 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         month = query.data.split("_")[2]
         year = query.data.split("_")[3]
         context.user_data["task_deadline"] = f"{day}-{month}-{year}"
+        file_choice = [
+            [InlineKeyboardButton("Yes", callback_data=f"task_add_file"),
+             InlineKeyboardButton("No", callback_data=f"task_no_file")]
+        ]
+        markup = InlineKeyboardMarkup(file_choice)
+        await context.bot.send_message(query.message.chat.id, "Would you like to add photos/files?", reply_markup=markup)
+        await query.answer()
+
+    elif query.data == "task_add_file":
+        menu = [
+            ["Send task"]
+        ]
+        markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
+        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.", reply_markup=markup)
+        await query.answer()
+        return TASK_FILES
+
+    elif query.data == "task_no_file":
         task_name = context.user_data["task_name"]
         task_description = context.user_data["task_description"]
         importance_level = context.user_data["task_importance"]
@@ -638,11 +704,13 @@ if __name__ == '__main__':
         ],
         states={
             TASK_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)],
+            TASK_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
+                         MessageHandler(filters.Regex(r'Send\s+task'), send_task)],
             REPORT_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_text_handler)],
-            REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, report_files_handler),
+            REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
                            MessageHandler(filters.Regex(r'👌\s*Done'), send_report)],
             DAILY_REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, daily_report_handler)],
-            DAILY_REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, report_files_handler),
+            DAILY_REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
                                  MessageHandler(filters.Regex(r'📩\s*Send\s*daily\s*report'), send_daily_report)]
         },
         fallbacks=[]

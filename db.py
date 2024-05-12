@@ -47,18 +47,32 @@ def db_user_tasks_table_insert(task_name: str, task_description: str, importance
 def db_get_all_tasks() -> list:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, task_name, task_description, importance_level, task_setting_time, task_deadline, "
-                   "assigned_users_id, task_status "
-                   "FROM user_tasks "
-                   "WHERE task_status='incomplete' OR task_status='pending'")
+    cursor.execute('''
+        SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
+        ut.assigned_users_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+        FROM user_tasks as ut
+        LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
+        WHERE task_status='incomplete' OR task_status='pending' AND (fa.report_id IS NULL OR fa.task_type = 'task')
+        GROUP BY ut.id
+    ''')
     rows = cursor.fetchall()
     tasks = []
     if rows:
         for row in rows:
-            task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = row
+            task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, \
+                assigned_users_id_str, task_status, file_details = row
             assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
-            task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline,
-                        assigned_users_id_list, task_status)
+            if file_details:
+                file_details_list = file_details.split(",")
+                files_list = []
+                for file in file_details_list:
+                    file_id, file_type = file.split(":")
+                    files_list.append(File(file_id, file_type))
+                task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline,
+                            assigned_users_id_list, task_status, files_list)
+            else:
+                task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline,
+                            assigned_users_id_list, task_status, None)
             tasks.append(task)
 
     conn.close()
@@ -82,18 +96,51 @@ def db_get_user_data(user_id: int) -> str or None:
         conn.close()
 
 
-def db_get_tasks_for_user(user_id: str, task_status=None) -> Task or list or None:
+def db_get_daily_reports():
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    if task_status == "pending" or task_status == "completed" or task_status == "incomplete":
-        query = f"SELECT id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id, task_status " \
-                f"FROM user_tasks " \
-                f"WHERE assigned_users_id LIKE ? AND task_status='{task_status}'"
+    cursor.execute('''
+        SELECT dr.id, dr.user_id, dr.report_name, dr.report_desc, dr.time_sent,
+        GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+        FROM daily_reports as dr
+        LEFT JOIN file_attachments AS fa ON dr.id = fa.report_id AND fa.task_type = 'daily_report'
+        WHERE fa.report_id IS NULL OR fa.task_type = 'daily_report'
+        GROUP BY dr.id
+    ''')
+    daily_reports = []
+    rows = cursor.fetchall()
+    if rows:
+        for row in rows:
+            report_id, user_id, report_name, report_desc, send_time, file_details = row
+            if file_details:
+                file_details_list = file_details.split(",")
+                files_list = []
+                for file in file_details_list:
+                    file_id, file_type = file.split(":")
+                    files_list.append(File(file_id, file_type))
+
+                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, files_list)
+            else:
+                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, None)
+            daily_reports.append(report)
+
+        return daily_reports
 
     else:
-        query = f"SELECT id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id, task_status " \
-                f"FROM user_tasks " \
-                f"WHERE assigned_users_id LIKE ?"
+        return None
+
+
+def db_get_tasks_for_user(user_id: str, task_status: str) -> list[Task] or None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    query = f'''
+        SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
+        ut.assigned_users_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+        FROM user_tasks as ut
+        LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
+        WHERE assigned_users_id LIKE ? AND task_status='{task_status}' AND (fa.report_id IS NULL OR fa.task_type = 'task')
+        GROUP BY ut.id
+        '''
 
     pattern = f'%{user_id}%'
     try:
@@ -102,17 +149,39 @@ def db_get_tasks_for_user(user_id: str, task_status=None) -> Task or list or Non
         if task_details_list:
             if len(task_details_list) == 1:
                 task_details = task_details_list[0]
-                task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = task_details
+                task_id, task_name, task_description, importance_level, task_setting_time, \
+                    task_deadline, assigned_users_id_str, task_status, file_details = task_details
                 assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
+                if file_details:
+                    file_details_list = file_details.split(",")
+                    files_list = []
+                    for file in file_details_list:
+                        file_id, file_type = file.split(":")
+                        files_list.append(File(file_id, file_type))
 
-                return [Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list, task_status)]
+                    return [Task(task_id, task_name, task_description, importance_level, task_setting_time,
+                                 task_deadline, assigned_users_id_list, task_status, files_list)]
+                else:
+                    return [Task(task_id, task_name, task_description, importance_level, task_setting_time,
+                                 task_deadline, assigned_users_id_list, task_status, None)]
 
             else:
                 tasks = []
                 for task_details in task_details_list:
-                    task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_str, task_status = task_details
+                    task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, \
+                        assigned_users_id_str, task_status, file_details = task_details
                     assigned_users_id_list = list(map(int, assigned_users_id_str.split(',')))
-                    task = Task(task_id, task_name, task_description, importance_level, task_setting_time, task_deadline, assigned_users_id_list, task_status)
+                    if file_details:
+                        file_details_list = file_details.split(",")
+                        files_list = []
+                        for file in file_details_list:
+                            file_id, file_type = file.split(":")
+                            files_list.append(File(file_id, file_type))
+                        task = Task(task_id, task_name, task_description, importance_level, task_setting_time,
+                                    task_deadline, assigned_users_id_list, task_status, files_list)
+                    else:
+                        task = Task(task_id, task_name, task_description, importance_level, task_setting_time,
+                                    task_deadline, assigned_users_id_list, task_status, None)
                     tasks.append(task)
 
                 return tasks
@@ -186,38 +255,13 @@ def db_get_daily_rep_id(user_id: int, report_desc: str) -> int:
     return report_id[0]
 
 
-def db_get_daily_reports():
+def db_get_task_id(task_name: str, task_desc: str) -> int:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT dr.id, dr.user_id, dr.report_name, dr.report_desc, dr.time_sent,
-        GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
-        FROM daily_reports as dr
-        LEFT JOIN file_attachments AS fa ON dr.id = fa.report_id AND fa.task_type = 'daily_report'
-        WHERE fa.report_id IS NULL OR fa.task_type = 'daily_report'
-        GROUP BY dr.id
-    ''')
-    daily_reports = []
-    rows = cursor.fetchall()
-    if rows:
-        for row in rows:
-            report_id, user_id, report_name, report_desc, send_time, file_details = row
-            if file_details:
-                file_details_list = file_details.split(",")
-                files_list = []
-                for file in file_details_list:
-                    file_id, file_type = file.split(":")
-                    files_list.append(File(file_id, file_type))
-
-                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, files_list)
-            else:
-                report = DailyReport(report_id, user_id, report_name, report_desc, send_time, None)
-            daily_reports.append(report)
-
-        return daily_reports
-
-    else:
-        return None
+    cursor.execute(f"SELECT id FROM user_tasks WHERE task_name='{task_name}' AND task_description='{task_desc}'")
+    report_id = cursor.fetchone()
+    conn.close()
+    return report_id[0]
 
 
 def db_get_reports(status: str):
@@ -272,8 +316,3 @@ def db_get_task_name(task_id: int) -> str:
     task_name = cursor.fetchone()
     conn.close()
     return task_name[0]
-
-
-
-
-
