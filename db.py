@@ -20,7 +20,7 @@ def db_user_data_table_insert(user_id: int, user_name: str, user_surname: str, u
 def db_get_all_users() -> list:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, user_name, user_surname, username FROM user_data')
+    cursor.execute('SELECT user_id, user_name, user_surname, username FROM user_data WHERE user_status=0')
     rows = cursor.fetchall()
     users = []
     if rows:
@@ -44,17 +44,27 @@ def db_user_tasks_table_insert(task_name: str, task_description: str, importance
     conn.close()
 
 
-def db_get_all_tasks() -> list:
+def db_get_all_tasks(task_status=None) -> list:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
-        ut.assigned_users_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
-        FROM user_tasks as ut
-        LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
-        WHERE task_status='incomplete' OR task_status='pending' AND (fa.report_id IS NULL OR fa.task_type = 'task')
-        GROUP BY ut.id
-    ''')
+    if not task_status:
+        cursor.execute('''
+            SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
+            ut.assigned_users_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+            FROM user_tasks as ut
+            LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
+            WHERE task_status='incomplete' OR task_status='pending' AND (fa.report_id IS NULL OR fa.task_type = 'task')
+            GROUP BY ut.id
+        ''')
+    else:
+        cursor.execute('''
+            SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
+            ut.assigned_users_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+            FROM user_tasks as ut
+            LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
+            WHERE task_status='completed' AND (fa.report_id IS NULL OR fa.task_type = 'task')
+            GROUP BY ut.id
+        ''')
     rows = cursor.fetchall()
     tasks = []
     if rows:
@@ -201,6 +211,33 @@ def db_delete_task(task_id: int) -> None:
     conn.close()
 
 
+def db_delete_file(attached_id: int, task_type: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM file_attachments "
+                   f"WHERE report_id={attached_id} "
+                   f"AND task_type='{task_type}'")
+
+    conn.commit()
+    conn.close()
+
+
+def db_delete_daily_rep(rep_id: int) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM daily_reports WHERE id={rep_id}")
+    conn.commit()
+    conn.close()
+
+
+def db_delete_report(rep_id: int) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM task_reports WHERE id={rep_id}")
+    conn.commit()
+    conn.close()
+
+
 def db_task_status_update(task_id: int, task_status: str) -> None:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -240,7 +277,7 @@ def db_files_table_insert(report_id: int, file_id: str, file_type: str, task_typ
 def db_get_report_id(user_id: int, task_id: int) -> int:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute(f'SELECT id FROM task_reports WHERE user_id={user_id} AND task_id={task_id}')
+    cursor.execute(f"SELECT id FROM task_reports WHERE user_id={user_id} AND task_id={task_id} AND report_status='pending'")
     report_id = cursor.fetchone()
     conn.close()
     return report_id[0]

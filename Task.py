@@ -18,6 +18,13 @@ class Task:
 
     def print_data(self) -> str:
         assigned_users_str = ', '.join([db.db_get_user_data(user_id) for user_id in self.assigned_users])
+        if self.task_status == "pending":
+            status = f"{self.task_status} ❗️❗️❗️"
+        elif self.task_status == "incomplete":
+            status = f"{self.task_status} ❌"
+        else:
+            status = f"{self.task_status} ✅"
+
         data = (
             "==================================\n"
             f"Task {self.task_id}: {self.task_name}\n"
@@ -26,7 +33,7 @@ class Task:
             f"- Date of issue: {self.task_setting_time}\n"
             f"- Deadline: {self.task_deadline}\n"
             f"- Assigned for: {assigned_users_str}\n"
-            f"- Status: {self.task_status}\n"
+            f"- Status: {status}\n"
             "=================================="
 
         )
