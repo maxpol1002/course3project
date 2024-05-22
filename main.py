@@ -43,7 +43,8 @@ from db import (
     db_get_task_id,
     db_delete_file,
     db_delete_daily_rep,
-    db_delete_report
+    db_delete_report,
+    db_dismiss_update
 )
 
 from inline_keyboards import build_inline_calendar, build_inline_keyboard
@@ -56,7 +57,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-TASK_DATA, REPORT_DATA, REPORT_FILES, DAILY_REPORT, DAILY_REPORT_FILES, TASK_FILES = range(6)
+TASK_DATA, REPORT_DATA, REPORT_FILES, DAILY_REPORT, DAILY_REPORT_FILES, TASK_FILES, DISMISS_REP = range(7)
 
 
 def get_user_status(user_id) -> int:
@@ -372,6 +373,28 @@ async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
 
+async def dismiss_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "dismiss_text" not in context.user_data:
+        context.user_data["dismiss_text"] = update.message.text
+
+    report_id = context.user_data["dismiss_rep_id"]
+    task_id = context.user_data["dismiss_rep_tid"]
+    user_id = context.user_data["dismiss_rep_uid"]
+    note = context.user_data["dismiss_text"]
+    dismiss_text = "\n++++++++++++++++++++++++++++++++++\nNote: "
+    dismiss_text += note
+    dismiss_text += "\n++++++++++++++++++++++++++++++++++"
+    db_dismiss_update(task_id, dismiss_text)
+    db_task_status_update(task_id, "incomplete")
+    db_report_status_update(report_id, "dismissed")
+    await context.bot.send_message(648380859, f"Report №{report_id} is dismissed.")
+    await context.bot.send_message(user_id,
+                                   f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.\n"
+                                   f"Note: {note}")
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
 async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report_docs = context.user_data.setdefault("report_docs", [])
     report_photos = context.user_data.setdefault("report_photos", [])
@@ -570,6 +593,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
 
     elif query.data.startswith("send_selected"):
+        await update.effective_message.delete()
         await context.bot.send_message(query.message.chat.id, "Input task name:")
         await query.answer()
         return TASK_DATA
@@ -751,16 +775,21 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
 
     elif query.data.startswith("dismiss_report"):
-        report_id = int(query.data.split("_")[2])
-        task_id = int(query.data.split("_")[3])
-        user_id = int(query.data.split("_")[4])
-        db_task_status_update(task_id, "incomplete")
-        db_report_status_update(report_id, "dismissed")
+        # report_id = int(query.data.split("_")[2])
+        # task_id = int(query.data.split("_")[3])
+        # user_id = int(query.data.split("_")[4])
+        context.user_data["dismiss_rep_id"] = int(query.data.split("_")[2])
+        context.user_data["dismiss_rep_tid"] = int(query.data.split("_")[3])
+        context.user_data["dismiss_rep_uid"] = int(query.data.split("_")[4])
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is dismissed.")
-        await context.bot.send_message(user_id,
-                                       f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.")
+        await context.bot.send_message(query.message.chat.id, "Explain the reason for dismissing, specify new order:")
+        # db_task_status_update(task_id, "incomplete")
+        # db_report_status_update(report_id, "dismissed")
+        # await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is dismissed.")
+        # await context.bot.send_message(user_id,
+        #                                f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.")
         await query.answer()
+        return DISMISS_REP
 
     elif query.data.startswith("delete_daily"):
         report_id = int(query.data.split("_")[2])
@@ -792,7 +821,8 @@ if __name__ == '__main__':
                            MessageHandler(filters.Regex(r'👌\s*Done'), send_report)],
             DAILY_REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, daily_report_handler)],
             DAILY_REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
-                                 MessageHandler(filters.Regex(r'📩\s*Send\s*daily\s*report'), send_daily_report)]
+                                 MessageHandler(filters.Regex(r'📩\s*Send\s*daily\s*report'), send_daily_report)],
+            DISMISS_REP: [MessageHandler(filters.TEXT & ~filters.COMMAND, dismiss_text_handler)]
         },
         fallbacks=[]
     )

@@ -353,3 +353,12 @@ def db_get_task_name(task_id: int) -> str:
     task_name = cursor.fetchone()
     conn.close()
     return task_name[0]
+
+
+def db_dismiss_update(task_id: int, note: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE user_tasks SET task_description=task_description || '{note}'"
+                   f"WHERE id={task_id}")
+    conn.commit()
+    conn.close()
