@@ -362,3 +362,11 @@ def db_dismiss_update(task_id: int, note: str) -> None:
                    f"WHERE id={task_id}")
     conn.commit()
     conn.close()
+
+
+def db_task_deadline_update(task_id: int, task_deadline: str) -> None:
+    conn = sqlite3.connect('db/database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE user_tasks SET task_deadline='{task_deadline}' WHERE id={task_id}")
+    conn.commit()
+    conn.close()

@@ -44,7 +44,8 @@ from db import (
     db_delete_file,
     db_delete_daily_rep,
     db_delete_report,
-    db_dismiss_update
+    db_dismiss_update,
+    db_task_deadline_update
 )
 
 from inline_keyboards import build_inline_calendar, build_inline_keyboard
@@ -125,7 +126,14 @@ async def print_daily_reports(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def print_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, tasks) -> None:
     for task in tasks:
-        msg = await update.message.reply_text(task.print_data())
+        if task.task_status == "completed":
+            delete_button = [
+                [InlineKeyboardButton("❌ Delete", callback_data=f"delete_task_{task.task_id}")]
+            ]
+            msg = await update.message.reply_text(task.print_data(), reply_markup=InlineKeyboardMarkup(delete_button))
+        else:
+            msg = await update.message.reply_text(task.print_data())
+
         await send_media(task, 648380859, msg.id,  context)
 
 
@@ -283,7 +291,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             case "❌ Delete task":
                 admin_menu = [
-                    ["📋 View current tasks", "👥 Create task", "❌ Delete task"]
+                    ["📋 View current tasks", "✅ View completed tasks"], ["👥 Create task", "❌ Delete task"]
                 ]
                 admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
                 active_tasks = db_get_all_tasks()
@@ -377,21 +385,8 @@ async def dismiss_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if "dismiss_text" not in context.user_data:
         context.user_data["dismiss_text"] = update.message.text
 
-    report_id = context.user_data["dismiss_rep_id"]
-    task_id = context.user_data["dismiss_rep_tid"]
-    user_id = context.user_data["dismiss_rep_uid"]
-    note = context.user_data["dismiss_text"]
-    dismiss_text = "\n++++++++++++++++++++++++++++++++++\nNote: "
-    dismiss_text += note
-    dismiss_text += "\n++++++++++++++++++++++++++++++++++"
-    db_dismiss_update(task_id, dismiss_text)
-    db_task_status_update(task_id, "incomplete")
-    db_report_status_update(report_id, "dismissed")
-    await context.bot.send_message(648380859, f"Report №{report_id} is dismissed.")
-    await context.bot.send_message(user_id,
-                                   f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.\n"
-                                   f"Note: {note}")
-    context.user_data.clear()
+    context.user_data["year"] = datetime.now().year
+    await update.message.reply_text("Choose new deadline:", reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
     return ConversationHandler.END
 
 
@@ -712,16 +707,36 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         day = query.data.split("_")[1]
         month = query.data.split("_")[2]
         year = query.data.split("_")[3]
-        await context.bot.send_message(query.message.chat.id, f"Deadline chosen: {day}-{month}-{year}")
         context.user_data["task_deadline"] = f"{day}-{month}-{year}"
-        file_choice = [
-            [InlineKeyboardButton("Yes", callback_data=f"task_add_file"),
-             InlineKeyboardButton("No", callback_data=f"task_no_file")]
-        ]
-        markup = InlineKeyboardMarkup(file_choice)
-        await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, "Would you like to add photos/files?", reply_markup=markup)
-        await query.answer()
+        if "dismiss_text" not in context.user_data:
+            await context.bot.send_message(query.message.chat.id, f"Deadline chosen: {day}-{month}-{year}")
+            file_choice = [
+                [InlineKeyboardButton("Yes", callback_data=f"task_add_file"),
+                 InlineKeyboardButton("No", callback_data=f"task_no_file")]
+            ]
+            markup = InlineKeyboardMarkup(file_choice)
+            await update.effective_message.delete()
+            await context.bot.send_message(query.message.chat.id, "Would you like to add photos/files?", reply_markup=markup)
+            await query.answer()
+
+        else:
+            report_id = context.user_data["dismiss_rep_id"]
+            task_id = context.user_data["dismiss_rep_tid"]
+            user_id = context.user_data["dismiss_rep_uid"]
+            note = context.user_data["dismiss_text"]
+            dismiss_text = "\n++++++++++++++++++++++++++++++++++\nNote: "
+            dismiss_text += note
+            dismiss_text += "\n++++++++++++++++++++++++++++++++++"
+            await update.effective_message.delete()
+            db_dismiss_update(task_id, dismiss_text)
+            db_task_status_update(task_id, "incomplete")
+            db_report_status_update(report_id, "dismissed")
+            db_task_deadline_update(task_id, f"{day}-{month}-{year}")
+            await context.bot.send_message(648380859, f"Report №{report_id} is dismissed.")
+            await context.bot.send_message(user_id,
+                                           f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.\n"
+                                           f"Note: {note}")
+            context.user_data.clear()
 
     elif query.data == "task_add_file":
         await update.effective_message.delete()
@@ -775,19 +790,11 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
 
     elif query.data.startswith("dismiss_report"):
-        # report_id = int(query.data.split("_")[2])
-        # task_id = int(query.data.split("_")[3])
-        # user_id = int(query.data.split("_")[4])
         context.user_data["dismiss_rep_id"] = int(query.data.split("_")[2])
         context.user_data["dismiss_rep_tid"] = int(query.data.split("_")[3])
         context.user_data["dismiss_rep_uid"] = int(query.data.split("_")[4])
         await update.effective_message.delete()
         await context.bot.send_message(query.message.chat.id, "Explain the reason for dismissing, specify new order:")
-        # db_task_status_update(task_id, "incomplete")
-        # db_report_status_update(report_id, "dismissed")
-        # await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is dismissed.")
-        # await context.bot.send_message(user_id,
-        #                                f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.")
         await query.answer()
         return DISMISS_REP
 
