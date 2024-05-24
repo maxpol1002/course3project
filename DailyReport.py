@@ -12,7 +12,7 @@ class DailyReport:
         self.send_time = send_time
         self.files = files
 
-    def create_report_text(self):
+    def create_report_text(self) -> str:
         data = (
             "======================================\n"
             f"Report ID: {self.report_id}\n"
@@ -26,7 +26,7 @@ class DailyReport:
 
         return data
 
-    def get_media(self):
+    def get_media(self) -> tuple or None:
         photos = []
         videos = []
         docs = []

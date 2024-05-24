@@ -4,11 +4,11 @@ import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def get_days_in_month(year, month):
+def get_days_in_month(year, month) -> int:
     return calendar.monthrange(year, month)[1]
 
 
-def get_month_name(month_number):
+def get_month_name(month_number) -> str:
     return calendar.month_name[month_number]
 
 
@@ -44,7 +44,7 @@ def build_inline_keyboard(users_list, selected_users=None) -> InlineKeyboardMark
     idx = 1
     for user in users_list:
         is_selected = user.user_id in selected_users if selected_users else False
-        check_mark = "❌" if is_selected else "✅"
+        check_mark = "✅" if is_selected else "❌"
         users.append([
             InlineKeyboardButton(f"{idx}. {user.user_name} {user.user_surname}",
                                  callback_data="do_nothing"),

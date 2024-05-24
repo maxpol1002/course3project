@@ -67,7 +67,7 @@ def get_user_status(user_id) -> int:
     return 0
 
 
-def get_current_datetime_str():
+def get_current_datetime_str() -> str:
     current_datetime = datetime.now()
     formatted_datetime_str = current_datetime.strftime('%d-%m-%Y:%H:%M')
 
@@ -153,7 +153,8 @@ async def print_reports(update: Update, context: ContextTypes.DEFAULT_TYPE, repo
             delete_button = [
                 [InlineKeyboardButton("❌ Delete", callback_data=f"delete_report_{report.report_id}")]
             ]
-            msg = await update.message.reply_text(report.create_report_text(), reply_markup=InlineKeyboardMarkup(delete_button))
+            markup = InlineKeyboardMarkup(delete_button)
+            msg = await update.message.reply_text(report.create_report_text(), reply_markup=markup)
 
         await send_media(report, 648380859, msg.id, context)
 
@@ -336,7 +337,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ["🗓 Send daily report"]
                 ]
                 user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
-                active_tasks = db_get_tasks_for_user(str(current_user.id), "incomplete")
+                active_tasks = db_get_tasks_for_user(current_user.id, "incomplete")
                 if active_tasks:
                     await update.message.reply_text("My tasks:", reply_markup=user_menu_markup)
                     idx = 1
@@ -353,12 +354,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                     reply_markup=user_menu_markup)
 
             case "📜 View completed tasks":
-                completed_tasks = db_get_tasks_for_user(str(current_user.id), "completed")
+                completed_tasks = db_get_tasks_for_user(current_user.id, "completed")
                 if completed_tasks:
                     await update.message.reply_text("Completed tasks:")
                     idx = 1
                     for task in completed_tasks:
-                        await update.message.reply_text(task.print_for_user(idx))
+                        msg = await update.message.reply_text(task.print_for_user(idx))
+                        await send_media(task, current_user.id, msg.id, context)
                         idx += 1
 
                 else:
@@ -369,7 +371,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return DAILY_REPORT
 
 
-async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     if "report_text" not in context.user_data:
         context.user_data["report_text"] = update.message.text
         file_choice = [
@@ -390,7 +392,7 @@ async def dismiss_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 
-async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     report_docs = context.user_data.setdefault("report_docs", [])
     report_photos = context.user_data.setdefault("report_photos", [])
     report_videos = context.user_data.setdefault("report_videos", [])
@@ -417,7 +419,7 @@ async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["report_videos"] = report_videos
 
 
-async def daily_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def daily_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     if "daily_rep_name" not in context.user_data:
         context.user_data["daily_rep_name"] = update.message.text
         await update.message.reply_text("Enter report description:")
@@ -434,7 +436,7 @@ async def daily_report_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return ConversationHandler.END
 
 
-async def send_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     daily_rep_name = context.user_data["daily_rep_name"]
     daily_rep_desc = context.user_data["daily_rep_desc"]
     daily_rep_photos = context.user_data["report_photos"]
@@ -466,14 +468,14 @@ async def send_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     report_text = context.user_data["report_text"]
     report_photos = context.user_data["report_photos"]
     report_docs = context.user_data["report_docs"]
     report_videos = context.user_data["report_videos"]
     task_id = context.user_data["report_task_id"]
     user_id = context.user_data["report_user_id"]
-    db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending")
+    db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending", db_get_task_name(task_id))
     db_task_status_update(task_id, "pending")
     user_menu = [
         ["📋 View active tasks", "📜 View completed tasks"],
@@ -501,32 +503,31 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     task_name = context.user_data["task_name"]
     task_description = context.user_data["task_description"]
     importance_level = context.user_data["task_importance"]
     task_setting_time = get_current_datetime_str()
     task_deadline = context.user_data["task_deadline"]
     selected_users_list = context.user_data["selected_users"]
-    selected_users = ','.join(map(str, selected_users_list))
-    task_status = "incomplete"
-    db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
-                               selected_users, task_status)
     task_photos = context.user_data["report_photos"]
     task_docs = context.user_data["report_docs"]
     task_videos = context.user_data["report_videos"]
+    task_status = "incomplete"
+    db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
+                               selected_users_list[0], task_status)
 
     if task_photos:
         for photo in task_photos:
-            db_files_table_insert(db_get_task_id(task_name, task_description), photo, "photo", "task")
+            db_files_table_insert(db_get_task_id(task_setting_time, task_name, task_description), photo, "photo", "task")
 
     if task_docs:
         for document in task_docs:
-            db_files_table_insert(db_get_task_id(task_name, task_description), document, "document", "task")
+            db_files_table_insert(db_get_task_id(task_setting_time, task_name, task_description), document, "document", "task")
 
     if task_videos:
         for video in task_videos:
-            db_files_table_insert(db_get_task_id(task_name, task_description), video, "video", "task")
+            db_files_table_insert(db_get_task_id(task_setting_time, task_name, task_description), video, "video", "task")
 
     admin_menu = [
         ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"],
@@ -542,7 +543,7 @@ async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     if "task_name" not in context.user_data:
         context.user_data["task_name"] = update.message.text
         await context.bot.send_message(update.effective_user.id, "Input task description:")
@@ -579,10 +580,15 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("select_user"):
         selected_user_id = int(query.data.split("_")[2])
         selected_users = context.user_data.get("selected_users", [])
-        if selected_user_id in selected_users:
-            selected_users.remove(selected_user_id)
-        else:
+        if not selected_users:
             selected_users.append(selected_user_id)
+        else:
+            if selected_user_id == selected_users[0]:
+                selected_users.clear()
+            else:
+                selected_users.clear()
+                selected_users.append(selected_user_id)
+
         context.user_data["selected_users"] = selected_users
         await query.edit_message_reply_markup(reply_markup=build_inline_keyboard(db_get_all_users(), selected_users))
         await query.answer()
@@ -640,7 +646,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await update.effective_message.delete()
         task_id = int(query.data.split("_")[2])
         user_id = int(query.data.split("_")[3])
-        db_report_table_insert(user_id, task_id, get_current_datetime_str(), "No description", "pending")
+        db_report_table_insert(user_id, task_id, get_current_datetime_str(), "No description", "pending", db_get_task_name(task_id))
         db_task_status_update(task_id, "pending")
         await context.bot.send_message(query.message.chat.id, f"Thanks, your report is waiting for approval.")
         await context.bot.send_message(648380859,
@@ -663,7 +669,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         report_text = context.user_data["report_text"]
         task_id = context.user_data["report_task_id"]
         user_id = context.user_data["report_user_id"]
-        db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending")
+        db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending", db_get_task_name(task_id))
         db_task_status_update(task_id, "pending")
         await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task: {db_get_task_name(task_id)}\n"
                                                   f"Report text: {report_text}")
@@ -756,11 +762,11 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         task_setting_time = get_current_datetime_str()
         task_deadline = context.user_data["task_deadline"]
         selected_users_list = context.user_data["selected_users"]
-        selected_users = ','.join(map(str, selected_users_list))
+        selected_user = selected_users_list[0]
         task_status = "incomplete"
 
         db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
-                                   selected_users, task_status)
+                                   selected_user, task_status)
         await context.bot.send_message(query.message.chat.id, "Task created successfully!")
         for user_id in selected_users_list:
             await context.bot.send_message(user_id, "Hello, you have a new task!")
