@@ -1,5 +1,5 @@
 import db
-from File import File
+from classes.File import File
 
 
 class DailyReport:

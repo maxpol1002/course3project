@@ -1,4 +1,4 @@
-from File import File
+from classes.File import File
 
 import db
 

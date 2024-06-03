@@ -1,15 +1,14 @@
-import calendar
 import datetime
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
 
-
-def get_days_in_month(year, month) -> int:
-    return calendar.monthrange(year, month)[1]
-
-
-def get_month_name(month_number) -> str:
-    return calendar.month_name[month_number]
+from utility_methods import (
+    get_month_name,
+    get_days_in_month
+)
 
 
 def build_inline_calendar(current_month, current_year) -> InlineKeyboardMarkup:

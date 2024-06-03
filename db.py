@@ -1,11 +1,11 @@
 import datetime
 import sqlite3
 
-from DailyReport import DailyReport
-from User import User
-from Task import Task
-from Report import Report
-from File import File
+from classes.User import User
+from classes.Task import Task
+from classes.File import File
+from classes.Report import Report
+from classes.DailyReport import DailyReport
 
 
 def db_user_data_table_insert(user_id: int, user_name: str, user_surname: str, username: str, user_status: int) -> None:
@@ -20,7 +20,7 @@ def db_user_data_table_insert(user_id: int, user_name: str, user_surname: str, u
 def db_get_all_users() -> list:
     conn = sqlite3.connect('db/database.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, user_name, user_surname, username FROM user_data')
+    cursor.execute('SELECT user_id, user_name, user_surname, username FROM user_data WHERE user_status=0')
     rows = cursor.fetchall()
     users = []
     if rows:
@@ -56,7 +56,7 @@ def db_get_all_tasks(task_status=None) -> list:
             WHERE task_status='incomplete' OR task_status='pending' AND (fa.report_id IS NULL OR fa.task_type = 'task')
             GROUP BY ut.id
         ''')
-    else:
+    elif task_status == 1:
         cursor.execute('''
             SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
             ut.assigned_user_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
@@ -65,6 +65,15 @@ def db_get_all_tasks(task_status=None) -> list:
             WHERE task_status='completed' AND (fa.report_id IS NULL OR fa.task_type = 'task')
             GROUP BY ut.id
         ''')
+    elif task_status == 2:
+        cursor.execute('''
+                    SELECT ut.id, ut.task_name, ut.task_description, ut.importance_level, ut.task_setting_time, ut.task_deadline, 
+                    ut.assigned_user_id, ut.task_status, GROUP_CONCAT(fa.file_id || ':' || fa.file_type) AS file_details
+                    FROM user_tasks as ut
+                    LEFT JOIN file_attachments AS fa ON ut.id = fa.report_id AND fa.task_type = 'task'
+                    WHERE task_status='incomplete' AND (fa.report_id IS NULL OR fa.task_type = 'task')
+                    GROUP BY ut.id
+                ''')
     rows = cursor.fetchall()
     tasks = []
     if rows:
