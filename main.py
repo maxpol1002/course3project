@@ -53,18 +53,18 @@ if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(callback_data_handler),
-            MessageHandler(filters.Regex(r'🗓\s*Send\s*daily\s*report'), message_handler)
+            MessageHandler(filters.Regex(r'🗓\s*Надіслати\s*щоденний\s*звіт'), message_handler)
         ],
         states={
             TASK_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, task_data_handler)],
             TASK_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
-                         MessageHandler(filters.Regex(r'Send\s+task'), send_task)],
+                         MessageHandler(filters.Regex(r'Надіслати\s+завдання'), send_task)],
             REPORT_DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_text_handler)],
             REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
-                           MessageHandler(filters.Regex(r'👌\s*Done'), send_report)],
+                           MessageHandler(filters.Regex(r'👌\s*Надіслати'), send_report)],
             DAILY_REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, daily_report_handler)],
             DAILY_REPORT_FILES: [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, files_handler),
-                                 MessageHandler(filters.Regex(r'📩\s*Send\s*daily\s*report'), send_daily_report)],
+                                 MessageHandler(filters.Regex(r'📩\s*Надіслати\s*щоденний\s*звіт'), send_daily_report)],
             DISMISS_REP: [MessageHandler(filters.TEXT & ~filters.COMMAND, dismiss_text_handler)]
         },
         fallbacks=[]

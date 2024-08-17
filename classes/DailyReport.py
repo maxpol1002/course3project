@@ -14,13 +14,13 @@ class DailyReport:
 
     def create_report_text(self) -> str:
         data = (
-            "======================================\n"
-            f"Report ID: {self.report_id}\n"
-            f"Report from: {db.db_get_user_data(user_id=self.user_id)}\n"
-            f"Report name: {self.report_name}\n"
-            f"Report text: {self.report_desc}\n"
-            f"Time sent: {self.send_time}\n"
-            "======================================"
+            "==================================\n"
+            f"Номер звіту: {self.report_id}\n"
+            f"Відправник: {db.db_get_user_data(user_id=self.user_id)}\n"
+            f"Назва: {self.report_name}\n"
+            f"Текст звіту: {self.report_desc}\n"
+            f"Час відправлення: {self.send_time}\n"
+            "=================================="
 
         )
 

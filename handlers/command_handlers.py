@@ -30,10 +30,10 @@ async def task_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_menu = [
-        ["📋 View current tasks"]
+        ["📋 Встановлені завдання"]
     ]
     user_menu = [
-        ["📋 View active tasks"]
+        ["📋 Переглянути поточні завдання"]
     ]
     admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
     user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
@@ -46,27 +46,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_user_data_table_insert(user_id, user_name, user_surname, username, user_status)
 
     if user_status == 1:
-        await update.message.reply_text(f"Hello, {user_name}, you can use me as a service to communicate with "
-                                        f"your employees. With me, you can set tasks for your employees, receive and "
-                                        f"manage reports and lots of other cool things! ",
-                                        reply_markup=admin_menu_markup)
+        await update.message.reply_text(
+            f"Привіт, {user_name}, ти можеш використовувати мене як сервіс для спілкування з "
+            f"твоїми співробітниками. Зі мною ти можеш ставити завдання для співробітників, отримувати й "
+            f"керувати звітами, а також багато інших речей!", reply_markup=admin_menu_markup)
 
         t = time(9, 0, tzinfo=timezone('Europe/Kyiv'))
         context.job_queue.run_daily(task_notification, t)
 
     else:
-        await update.message.reply_text(f"Hello, {user.first_name} {user.last_name}, "
-                                        f"what a great day to work, isn't it?", reply_markup=user_menu_markup)
+        await update.message.reply_text(
+            f"Привіт, {user_name}, я твій бот для отримання актуальних завдань та надсилання звітів!",
+            reply_markup=user_menu_markup)
 
 
 async def readme(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
     user_status = get_user_status(user_id)
-    admin_markup = ReplyKeyboardMarkup([["📋 View current tasks"]], resize_keyboard=True)
+    admin_markup = ReplyKeyboardMarkup([["📋 Переглянути активні завдання"]], resize_keyboard=True)
+    user_markup = ReplyKeyboardMarkup([["📋 Переглянути поточні завдання"]], resize_keyboard=True)
     if user_status == 1:
         await update.message.reply_text("Use me via text buttons that appear automatically. "
                                         "Just click on them and let me do all the work =)", reply_markup=admin_markup)
     else:
         await update.message.reply_text("You can receive tasks here, send reports and daily reports. "
-                                        "Just click on buttons and see the magic yourself.")
+                                        "Just click on buttons and see the magic yourself.", reply_markup=user_markup)

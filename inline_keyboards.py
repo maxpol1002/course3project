@@ -51,6 +51,6 @@ def build_inline_keyboard(users_list, selected_users=None) -> InlineKeyboardMark
         ])
         idx += 1
     if selected_users:
-        users.append([InlineKeyboardButton("Create task", callback_data="send_selected")])
+        users.append([InlineKeyboardButton("Створити завдання", callback_data="send_selected")])
 
     return InlineKeyboardMarkup(users)

@@ -17,14 +17,13 @@ class Report:
 
     def create_report_text(self) -> str:
         data = (
-            "======================================\n"
-            f"Report ID: {self.report_id}\n"
-            f"Task name: {self.task_name}\n"
-            f"Executor: {db.db_get_user_data(user_id=self.user_id)}\n" 
-            f"Time sent: {self.send_time}\n"
-            f"Report text: {self.report_text}\n"
-            f"Report status: {self.report_status}\n"
-            "======================================"
+            "==================================\n"
+            f"Номер звіту: {self.report_id}\n"
+            f"Назва завдання: {self.task_name}\n"
+            f"Виконавець: {db.db_get_user_data(user_id=self.user_id)}\n" 
+            f"Час надсилання звіту: {self.send_time}\n"
+            f"Текст звіту: {self.report_text}\n"
+            "=================================="
 
         )
 

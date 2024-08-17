@@ -12,6 +12,7 @@ from telegram.ext import (
     ConversationHandler
 )
 
+import config
 from db import (
     db_user_tasks_table_insert,
     db_get_all_users,
@@ -58,99 +59,101 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_status = get_user_status(current_user.id)
     user_input = update.message.text
     admin_menu = [
-        ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"],
-        ["📊 View reports", "🗓 View daily reports"]
+        ["📋 Встановлені завдання", "🔢 Сортування завдань", "🛠 Керувати завданнями"],
+        ["📊 Переглянути звіти", "🗓 Переглянути щоденні звіти"]
     ]
     admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
     if user_status == 1:
         match user_input:
-            case "👥 Create task":
+            case "👥 Створити завдання":
                 context.user_data.clear()
                 selected_users = context.user_data.get("selected_users", [])
-                await update.message.reply_text("List of all users:",
+                await update.message.reply_text("Оберіть виконавця:",
                                                 reply_markup=build_inline_keyboard(db_get_all_users(), selected_users))
 
-            case "📋 View current tasks":
+            case "📋 Встановлені завдання":
                 active_tasks = db_get_all_tasks()
                 if active_tasks:
-                    await update.message.reply_text("Active tasks:", reply_markup=admin_menu_markup)
+                    await update.message.reply_text("Поточні завдання:", reply_markup=admin_menu_markup)
                     await print_tasks(update, context, active_tasks)
                 else:
-                    await update.message.reply_text("There are no tasks assigned at this moment.",
+                    await update.message.reply_text("Активних завдань на даний момент немає.",
                                                     reply_markup=admin_menu_markup)
 
-            case "📊 View reports":
+            case "📊 Переглянути звіти":
                 admin_menu = [
-                    ["📋 View current tasks", "⏳ Pending reports"],
-                    ["✔️ Approved reports", "🚫 Dismissed reports"]
+                    ["📋 Встановлені завдання", "⏳ Звіти для перевірки"],
+                    ["✔️ Затверджені звіти", "🚫 Відхилені звіти"]
                 ]
                 admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
-                await update.message.reply_text("Click button below to check pending or approved reports.",
+                await update.message.reply_text("Оберіть знизу тип звітів, які ви хочете переглянути.",
                                                 reply_markup=admin_menu_markup)
 
-            case "⏳ Pending reports":
+            case "⏳ Звіти для перевірки":
                 pending_reports = db_get_reports(status="pending")
                 if pending_reports:
-                    await update.message.reply_text("Pending reports:")
+                    await update.message.reply_text("Звіти для перевірки:")
                     await print_reports(update, context, pending_reports)
 
                 else:
-                    await update.message.reply_text("There are no pending reports at this moment.")
+                    await update.message.reply_text("На даний момент немає звітів для перевірки.")
 
-            case "✔️ Approved reports":
+            case "✔️ Затверджені звіти":
                 approved_reports = db_get_reports(status="approved")
                 if approved_reports:
-                    await update.message.reply_text("Approved reports:")
+                    await update.message.reply_text("Затверджені звіти:")
                     await print_reports(update, context, approved_reports)
 
                 else:
-                    await update.message.reply_text("There are no approved reports at this moment.")
+                    await update.message.reply_text("На даний момент немає затверджених звітів.")
 
-            case "🚫 Dismissed reports":
+            case "🚫 Відхилені звіти":
                 dismissed_reports = db_get_reports(status="dismissed")
                 if dismissed_reports:
-                    await update.message.reply_text("Dismissed reports:")
+                    await update.message.reply_text("Відхилені звіти:")
                     await print_reports(update, context, dismissed_reports)
 
                 else:
-                    await update.message.reply_text("There are no dismissed reports at this moment.")
+                    await update.message.reply_text("На даний момент немає відхилених звітів.")
 
-            case "🔢 Sort tasks":
+            case "🔢 Сортування завдань":
                 if db_get_all_tasks():
                     sort_inline_keyboard = [
-                        InlineKeyboardButton("Importance", callback_data="sort.tasks.importance_level"),
-                        InlineKeyboardButton("Date of issue", callback_data="sort.tasks.task_setting_time"),
-                        InlineKeyboardButton("Deadline", callback_data="sort.tasks.task_deadline")]
+                        InlineKeyboardButton("Ступ. важливості", callback_data="sort.tasks.importance_level"),
+                        InlineKeyboardButton("Дата постановки", callback_data="sort.tasks.task_setting_time"),
+                        InlineKeyboardButton("Дедлайн", callback_data="sort.tasks.task_deadline")]
                     sort_inline_markup = InlineKeyboardMarkup([sort_inline_keyboard])
 
-                    await update.message.reply_text("Sort tasks by:", reply_markup=sort_inline_markup)
+                    await update.message.reply_text("Оберіть тип сортування:", reply_markup=sort_inline_markup)
 
                 else:
-                    await update.message.reply_text("There are no tasks assigned at this moment.")
+                    await update.message.reply_text("Активних завдань на даний момент немає.")
 
-            case "🛠 Manage tasks":
+            case "🛠 Керувати завданнями":
                 admin_menu = [
-                    ["📋 View current tasks", "✅ View completed tasks"], ["👥 Create task", "❌ Delete task"]
+                    ["📋 Встановлені завдання", "✅ Переглянути виконані завдання"], ["👥 Створити завдання",
+                                                                                            "❌ Видалити завдання"]
                 ]
                 admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
-                await update.message.reply_text("Here you can manage all tasks.", reply_markup=admin_menu_markup)
+                await update.message.reply_text("Тут ви можете керувати усіма завданнями.", reply_markup=admin_menu_markup)
 
-            case "✅ View completed tasks":
+            case "✅ Переглянути виконані завдання":
                 completed_tasks = db_get_all_tasks(1)
                 if completed_tasks:
-                    await update.message.reply_text("Completed tasks:")
+                    await update.message.reply_text("Виконані завдання:")
                     await print_tasks(update, context, completed_tasks)
                 else:
-                    await update.message.reply_text("There are no completed tasks at this moment.")
+                    await update.message.reply_text("На даний момент немає виконаних завдань.")
 
-            case "❌ Delete task":
+            case "❌ Видалити завдання":
                 admin_menu = [
-                    ["📋 View current tasks", "✅ View completed tasks"], ["👥 Create task", "❌ Delete task"]
+                    ["📋 Встановлені завдання", "✅ Переглянути виконані завдання"], ["👥 Створити завдання",
+                                                                                            "❌ Видалити завдання"]
                 ]
                 admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
                 active_tasks = db_get_all_tasks()
                 if active_tasks:
-                    await update.message.reply_text("Choose which task you want to delete:",
+                    await update.message.reply_text("Оберіть завдання, яке ви хочете видалити:",
                                                     reply_markup=admin_menu_markup)
                     for task in active_tasks:
                         if task.task_status == "pending":
@@ -165,37 +168,37 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await send_media(task, current_user.id, msg.id, context)
 
                 else:
-                    await update.message.reply_text("There are no tasks assigned at this moment.")
+                    await update.message.reply_text("На даний момент немає активних завдань.")
 
-            case "🗓 View daily reports":
+            case "🗓 Переглянути щоденні звіти":
                 admin_menu = [
-                    ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"],
-                    ["📊 View reports", "🗓 View daily reports"]
+                    ["📋 Встановлені завдання", "🔢 Сортування завдань", "🛠 Керувати завданнями"],
+                    ["📊 Переглянути звіти", "🗓 Переглянути щоденні звіти"]
                 ]
                 admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
                 daily_reports = db_get_daily_reports()
                 if daily_reports:
-                    await update.message.reply_text("Your daily reports:", reply_markup=admin_menu_markup)
+                    await update.message.reply_text("Щоденні звіти:", reply_markup=admin_menu_markup)
                     await print_daily_reports(update, context, db_get_daily_reports())
 
                 else:
-                    await update.message.reply_text("There are no daily reports at this moment.",
+                    await update.message.reply_text("На даний момент немає щоденних звітів.",
                                                     reply_markup=admin_menu_markup)
 
     else:
         match user_input:
-            case "📋 View active tasks":
+            case "📋 Переглянути поточні завдання":
                 user_menu = [
-                    ["📋 View active tasks", "📜 View completed tasks"],
-                    ["🗓 Send daily report"]
+                    ["📋 Переглянути поточні завдання", "📜 Переглянути виконані завдання"],
+                    ["🗓 Надіслати щоденний звіт"]
                 ]
                 user_menu_markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
                 active_tasks = db_get_tasks_for_user(current_user.id, "incomplete")
                 if active_tasks:
-                    await update.message.reply_text("My tasks:", reply_markup=user_menu_markup)
+                    await update.message.reply_text("Мої завдання:", reply_markup=user_menu_markup)
                     idx = 1
                     for task in active_tasks:
-                        confirm_task_button = [[InlineKeyboardButton("Confirm",
+                        confirm_task_button = [[InlineKeyboardButton("Підтвердити виконання",
                                                                      callback_data=f"confirm_task_{task.task_id}_{current_user.id}")]]
                         msg = await update.message.reply_text(task.print_for_user(idx),
                                                               reply_markup=InlineKeyboardMarkup(confirm_task_button))
@@ -203,13 +206,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         idx += 1
 
                 else:
-                    await update.message.reply_text("You have no active tasks at this moment.",
-                                                    reply_markup=user_menu_markup)
+                    await update.message.reply_text("Для вас поки немає завдань.", reply_markup=user_menu_markup)
 
-            case "📜 View completed tasks":
+            case "📜 Переглянути виконані завдання":
                 completed_tasks = db_get_tasks_for_user(current_user.id, "completed")
                 if completed_tasks:
-                    await update.message.reply_text("Completed tasks:")
+                    await update.message.reply_text("Виконані завдання:")
                     idx = 1
                     for task in completed_tasks:
                         msg = await update.message.reply_text(task.print_for_user(idx))
@@ -217,10 +219,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         idx += 1
 
                 else:
-                    await update.message.reply_text("You have no completed tasks at this moment.")
+                    await update.message.reply_text("В вас поки що немає виконаних завдань.")
 
-            case "🗓 Send daily report":
-                await update.message.reply_text("Enter report name:")
+            case "🗓 Надіслати щоденний звіт":
+                await update.message.reply_text("Введіть назву для звіту:")
                 return DAILY_REPORT
 
 
@@ -228,11 +230,11 @@ async def report_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if "report_text" not in context.user_data:
         context.user_data["report_text"] = update.message.text
         file_choice = [
-            [InlineKeyboardButton("Yes", callback_data=f"report_add_file"),
-             InlineKeyboardButton("No", callback_data=f"report_no_file")]
+            [InlineKeyboardButton("Так", callback_data=f"report_add_file"),
+             InlineKeyboardButton("Ні", callback_data=f"report_no_file")]
         ]
         markup = InlineKeyboardMarkup(file_choice)
-        await update.message.reply_text("Do you want to add photos/files?", reply_markup=markup)
+        await update.message.reply_text("Ви бажаєте додати фото/файл?", reply_markup=markup)
         return ConversationHandler.END
 
 
@@ -241,7 +243,7 @@ async def dismiss_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["dismiss_text"] = update.message.text
 
     context.user_data["year"] = datetime.now().year
-    await update.message.reply_text("Choose new deadline:", reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
+    await update.message.reply_text("Оберіть новий дедлайн:", reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
     return ConversationHandler.END
 
 
@@ -249,23 +251,25 @@ async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     report_docs = context.user_data.setdefault("report_docs", [])
     report_photos = context.user_data.setdefault("report_photos", [])
     report_videos = context.user_data.setdefault("report_videos", [])
+
     if update.message.photo:
         photo_id = update.message.photo[-1].file_id
         report_photos.append(photo_id)
-        await update.message.reply_text("Photo received. You can add more files or proceed.")
+        await update.message.reply_text("Фото отримано. Ви можете додати інші фото/файли чи продовжити.")
 
     elif update.message.document:
         document_id = update.message.document.file_id
         report_docs.append(document_id)
-        await update.message.reply_text("Document received. You can add more files or proceed.")
+        await update.message.reply_text("Документ отримано. Ви можете додати інші фото/файли чи продовжити.")
 
     elif update.message.video:
         video_id = update.message.video.file_id
         report_videos.append(video_id)
-        await update.message.reply_text("Video received. You can add more files or proceed.")
+        await update.message.reply_text("Відео отримано. Ви можете додати інші фото/файли чи продовжити.")
 
     else:
-        await update.message.reply_text("Wrong file type.")
+        await update.message.reply_text("Помилковий тип файлу. Ви можете надсилати фото, відео, "
+                                        "документи типу pdf/word чи таблиці Excel.")
 
     context.user_data["report_photos"] = report_photos
     context.user_data["report_docs"] = report_docs
@@ -275,17 +279,17 @@ async def files_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def daily_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     if "daily_rep_name" not in context.user_data:
         context.user_data["daily_rep_name"] = update.message.text
-        await update.message.reply_text("Enter report description:")
+        await update.message.reply_text("Введіть опис звіту:")
         return DAILY_REPORT
 
     elif "daily_rep_desc" not in context.user_data:
         context.user_data["daily_rep_desc"] = update.message.text
         file_choice = [
-            [InlineKeyboardButton("Yes", callback_data=f"daily_rep_file"),
-             InlineKeyboardButton("No", callback_data=f"daily_rep_no")]
+            [InlineKeyboardButton("Так", callback_data=f"daily_rep_file"),
+             InlineKeyboardButton("Ні", callback_data=f"daily_rep_no")]
         ]
         markup = InlineKeyboardMarkup(file_choice)
-        await context.bot.send_message(update.message.chat.id, "Do you want to add photos/files?", reply_markup=markup)
+        await context.bot.send_message(update.message.chat.id, "Ви бажаєте додати фото чи файли?", reply_markup=markup)
         return ConversationHandler.END
 
 
@@ -311,12 +315,12 @@ async def send_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             db_files_table_insert(db_get_daily_rep_id(user_id, daily_rep_desc), video, "video", "daily_report")
 
     user_menu = [
-        ["📋 View active tasks", "📜 View completed tasks"],
-        ["🗓 Send daily report"]
+        ["📋 Переглянути поточні завдання", "📜 Переглянути виконані завдання"],
+        ["🗓 Надіслати щоденний звіт"]
     ]
     markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
-    await context.bot.send_message(user_id, "Daily report sent.", reply_markup=markup)
-    await context.bot.send_message(648380859, f"You have new daily report from {db_get_user_data(user_id)}.")
+    await context.bot.send_message(user_id, "Щоденний звіт успішно надісланий. Очікуйте на перевірку.", reply_markup=markup)
+    await context.bot.send_message(config.ADMIN_ID, f"Отримано новий щоденний звіт від {db_get_user_data(user_id)}.")
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -331,12 +335,12 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Con
     db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending", db_get_task_name(task_id))
     db_task_status_update(task_id, "pending")
     user_menu = [
-        ["📋 View active tasks", "📜 View completed tasks"],
-        ["🗓 Send daily report"]
+        ["📋 Переглянути поточні завдання", "📜 Переглянути виконані завдання"],
+        ["🗓 Надіслати щоденний звіт"]
     ]
-    await context.bot.send_message(648380859,
-                                   f"You have new report for task: {db_get_task_name(task_id)} from {db_get_user_data(user_id)}\n"
-                                   f"Report text: {report_text}")
+    await context.bot.send_message(config.ADMIN_ID,
+                                   f"Отримано звіт для завдання: {db_get_task_name(task_id)} від {db_get_user_data(user_id)}\n"
+                                   f"Текст звіту: {report_text}")
     if report_photos:
         for photo in report_photos:
             db_files_table_insert(db_get_report_id(user_id, task_id), photo, "photo", "task_report")
@@ -349,7 +353,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Con
         for video in report_videos:
             db_files_table_insert(db_get_report_id(user_id, task_id), video, "video", "task_report")
 
-    await context.bot.send_message(user_id, "Report has been sent.",
+    await context.bot.send_message(user_id, "Звіт успішно надісланий. Очікуйте на перевірку.",
                                    reply_markup=ReplyKeyboardMarkup(user_menu, resize_keyboard=True))
 
     context.user_data.clear()
@@ -383,14 +387,14 @@ async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Conve
             db_files_table_insert(db_get_task_id(task_setting_time, task_name, task_description), video, "video", "task")
 
     admin_menu = [
-        ["📋 View current tasks", "🔢 Sort tasks", "🛠 Manage tasks"],
-        ["📊 View reports", "🗓 View daily reports"]
+        ["📋 Встановлені завдання", "🔢 Сортування завдань", "🛠 Керувати завданнями"],
+        ["📊 Переглянути звіти", "🗓 Переглянути щоденні звіти"]
     ]
     admin_menu_markup = ReplyKeyboardMarkup(admin_menu, resize_keyboard=True)
 
-    await context.bot.send_message(648380859, "Task created successfully!", reply_markup=admin_menu_markup)
+    await context.bot.send_message(config.ADMIN_ID, "Завдання успішно створено!", reply_markup=admin_menu_markup)
     for user_id in selected_users_list:
-        await context.bot.send_message(user_id, "Hello, you have a new task!")
+        await context.bot.send_message(user_id, "Ви отримали нове завдання.")
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -399,26 +403,26 @@ async def send_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Conve
 async def task_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ConversationHandler.END:
     if "task_name" not in context.user_data:
         context.user_data["task_name"] = update.message.text
-        await context.bot.send_message(update.effective_user.id, "Input task description:")
+        await context.bot.send_message(update.effective_user.id, "Введіть опис завдання:")
         return TASK_DATA
 
     elif "task_description" not in context.user_data:
         context.user_data["task_description"] = update.message.text
         await context.bot.send_message(update.effective_user.id,
-                                       "Input task importance (1-5, where 5 is super-important):")
+                                       "Введіть ступінь важливості завдання (від 1 до 5, де 5 - максимальний ступінь важливості):")
         return TASK_DATA
 
     elif "task_importance" not in context.user_data:
         importance_input = update.message.text.strip()
         if not importance_input.isdigit() or not (1 <= int(importance_input) <= 5):
             await context.bot.send_message(update.effective_user.id,
-                                           "Invalid input. Importance level must be a valid integer between 1 and 5.")
-            await context.bot.send_message(update.effective_user.id, "Input task importance (1-5):")
+                                           "Некоректний ступінь. Це має бути ціле число від 1 до 5. Спробуйте ще раз.")
+            await context.bot.send_message(update.effective_user.id, "Введіть ступінь важливості (1-5):")
             return TASK_DATA
 
         importance_level = int(importance_input)
         context.user_data["task_importance"] = importance_level
-        await context.bot.send_message(update.effective_user.id, "Select task deadline:",
+        await context.bot.send_message(update.effective_user.id, "Оберіть дедлайн завдання:",
                                        reply_markup=build_inline_calendar(datetime.now().month, datetime.now().year))
         context.user_data["year"] = datetime.now().year
 

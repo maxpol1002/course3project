@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
+import config
 from inline_keyboards import build_inline_keyboard, build_inline_calendar
 
 from config import (
@@ -61,16 +62,22 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif query.data.startswith("send_selected"):
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, "Input task name:")
+        await context.bot.send_message(query.message.chat.id, "Введіть назву завдання:")
         await query.answer()
         return TASK_DATA
 
     elif query.data.startswith("sort.tasks"):
         sort_value = str(query.data.split(".")[2])
+        sort_type = {
+            "importance_level": "Cтупінь важливості",
+            "task_setting_time": "Дата встановлення завдання",
+            "task_deadline": "Дедлайн завдання"
+        }
+
         sorted_tasks = sorted(db_get_all_tasks(), key=lambda x: getattr(x, sort_value))
         await context.bot.send_message(query.message.chat.id,
-                                       f"=======================\nSorted by: {sort_value.replace('_', ' ')}\n"
-                                       f"=======================")
+                                       f"==================================\nВідсортовано за: {sort_type[sort_value]}\n"
+                                       f"==================================")
         for task in sorted_tasks:
             msg = await context.bot.send_message(query.message.chat.id, task.print_data())
             await send_media(task, query.message.chat.id, msg.id, context)
@@ -81,20 +88,20 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         db_delete_task(task_id)
         db_delete_file(task_id, "task")
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, f"Task {task_id} was successfully deleted.")
+        await context.bot.send_message(query.message.chat.id, f"Завдання {task_id} успішно видалено.")
         await query.answer()
 
     elif query.data.startswith("confirm_task"):
         task_id = int(query.data.split("_")[2])
         user_id = int(query.data.split("_")[3])
         rep_choice = [
-            [InlineKeyboardButton("Yes", callback_data=f"send_report_{task_id}_{user_id}"),
-             InlineKeyboardButton("No", callback_data=f"no_report_{task_id}_{user_id}")]
+            [InlineKeyboardButton("Так", callback_data=f"send_report_{task_id}_{user_id}"),
+             InlineKeyboardButton("Ні", callback_data=f"no_report_{task_id}_{user_id}")]
         ]
         rep_choice_markup = InlineKeyboardMarkup(rep_choice)
         await update.effective_message.delete()
         await context.bot.send_message(query.message.chat.id,
-                                       f"Task: {db_get_task_name(task_id)} marked as completed, do you want to add report?",
+                                       f"Завдання: {db_get_task_name(task_id)} позначено як виконане, чи бажаєте ви додати звіт?",
                                        reply_markup=rep_choice_markup)
         await query.answer()
 
@@ -104,7 +111,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         user_id = int(query.data.split("_")[3])
         context.user_data["report_task_id"] = task_id
         context.user_data["report_user_id"] = user_id
-        await context.bot.send_message(query.message.chat.id, f"Add description to your report.")
+        await context.bot.send_message(query.message.chat.id, f"Додайте опис до звіту.")
         await query.answer()
         return REPORT_DATA
 
@@ -114,31 +121,31 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         user_id = int(query.data.split("_")[3])
         db_report_table_insert(user_id, task_id, get_current_datetime_str(), "No description", "pending", db_get_task_name(task_id))
         db_task_status_update(task_id, "pending")
-        await context.bot.send_message(query.message.chat.id, f"Thanks, your report is waiting for approval.")
-        await context.bot.send_message(648380859,
-                                       f"{db_get_user_data(user_id)} completed task: {db_get_task_name(task_id)}")
+        await context.bot.send_message(query.message.chat.id, f"Ваш звіт було надіслано. Очікуйте на перевірку.")
+        await context.bot.send_message(config.ADMIN_ID,
+                                       f"{db_get_user_data(user_id)} виконав завдання: {db_get_task_name(task_id)}")
         await query.answer()
 
     elif query.data == "report_add_file":
         await update.effective_message.delete()
         user_menu = [
-            ["👌 Done"]
+            ["👌 Надіслати"]
         ]
         markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
-        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.", reply_markup=markup)
+        await context.bot.send_message(query.message.chat.id, "Надішліть фото чи файл.", reply_markup=markup)
         await query.answer()
         return REPORT_FILES
 
     elif query.data == "report_no_file":
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, "Your report was sent.")
+        await context.bot.send_message(query.message.chat.id, "Ваш звіт було надіслано. Очікуйте на перевірку.")
         report_text = context.user_data["report_text"]
         task_id = context.user_data["report_task_id"]
         user_id = context.user_data["report_user_id"]
         db_report_table_insert(user_id, task_id, get_current_datetime_str(), report_text, "pending", db_get_task_name(task_id))
         db_task_status_update(task_id, "pending")
-        await context.bot.send_message(648380859, f"{db_get_user_data(user_id)} completed task: {db_get_task_name(task_id)}\n"
-                                                  f"Report text: {report_text}")
+        await context.bot.send_message(config.ADMIN_ID, f"{db_get_user_data(user_id)} виконав завдання: {db_get_task_name(task_id)}\n"
+                                                  f"Текст звіту: {report_text}")
         context.user_data.clear()
         await query.answer()
 
@@ -149,9 +156,9 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         db_task_status_update(task_id, "completed")
         db_report_status_update(report_id, "approved")
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, f"Report №{report_id} is approved.")
+        await context.bot.send_message(query.message.chat.id, f"Звіт №{report_id} затверджено.")
         await context.bot.send_message(user_id,
-                                       f"Your report for task {db_get_task_name(task_id)} was approved. Good job!")
+                                       f"Ваш звіт до завдання {db_get_task_name(task_id)} було затверджено.")
         await query.answer()
 
     elif query.data.startswith("month"):
@@ -181,14 +188,14 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         year = query.data.split("_")[3]
         context.user_data["task_deadline"] = f"{day}-{month}-{year}"
         if "dismiss_text" not in context.user_data:
-            await context.bot.send_message(query.message.chat.id, f"Deadline chosen: {day}-{month}-{year}")
+            await context.bot.send_message(query.message.chat.id, f"Обраний дедлайн: {day}-{month}-{year}")
             file_choice = [
-                [InlineKeyboardButton("Yes", callback_data=f"task_add_file"),
-                 InlineKeyboardButton("No", callback_data=f"task_no_file")]
+                [InlineKeyboardButton("Так", callback_data=f"task_add_file"),
+                 InlineKeyboardButton("Ні", callback_data=f"task_no_file")]
             ]
             markup = InlineKeyboardMarkup(file_choice)
             await update.effective_message.delete()
-            await context.bot.send_message(query.message.chat.id, "Would you like to add photos/files?", reply_markup=markup)
+            await context.bot.send_message(query.message.chat.id, "Чи бажаєте ви додати фото або файли?", reply_markup=markup)
             await query.answer()
 
         else:
@@ -196,7 +203,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
             task_id = context.user_data["dismiss_rep_tid"]
             user_id = context.user_data["dismiss_rep_uid"]
             note = context.user_data["dismiss_text"]
-            dismiss_text = "\n++++++++++++++++++++++++++++++++++\nNote: "
+            dismiss_text = "\n++++++++++++++++++++++++++++++++++\nДодаток: "
             dismiss_text += note
             dismiss_text += "\n++++++++++++++++++++++++++++++++++"
             await update.effective_message.delete()
@@ -204,10 +211,10 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
             db_task_status_update(task_id, "incomplete")
             db_report_status_update(report_id, "dismissed")
             db_task_deadline_update(task_id, f"{day}-{month}-{year}")
-            await context.bot.send_message(648380859, f"Report №{report_id} is dismissed.")
+            await context.bot.send_message(config.ADMIN_ID, f"Звіт №{report_id} було відхилено.")
             await context.bot.send_message(user_id,
-                                           f"Your report for task {db_get_task_name(task_id)} was dismissed. Redo the task.\n"
-                                           f"Note: {note}")
+                                           f"Ваш звіт до завдання {db_get_task_name(task_id)} було відхилено. Переробіть завдання.\n"
+                                           f"Додаток: {note}")
             context.user_data.clear()
 
     elif query.data == "task_add_file":
@@ -216,7 +223,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
             ["Send task"]
         ]
         markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
-        await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.", reply_markup=markup)
+        await context.bot.send_message(query.message.chat.id, "Надішліть фото чи файл.", reply_markup=markup)
         await query.answer()
         return TASK_FILES
 
@@ -233,9 +240,9 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
         db_user_tasks_table_insert(task_name, task_description, importance_level, task_setting_time, task_deadline,
                                    selected_user, task_status)
-        await context.bot.send_message(query.message.chat.id, "Task created successfully!")
+        await context.bot.send_message(query.message.chat.id, "Завдання успішно створено!")
         for user_id in selected_users_list:
-            await context.bot.send_message(user_id, "Hello, you have a new task!")
+            await context.bot.send_message(user_id, "Вітаю, у вас нове завдання!")
 
         context.user_data.clear()
         await query.answer()
@@ -244,7 +251,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await update.effective_message.delete()
         context.user_data["daily_user_id"] = query.from_user.id
         user_menu = [
-            ["📩 Send daily report"]
+            ["📩 Надіслати щоденний звіт"]
         ]
         markup = ReplyKeyboardMarkup(user_menu, resize_keyboard=True)
         await context.bot.send_message(query.message.chat.id, "Okay, send your photo/file.", reply_markup=markup)
@@ -256,8 +263,8 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         daily_rep_name = context.user_data["daily_rep_name"]
         daily_rep_desc = context.user_data["daily_rep_desc"]
         db_daily_report_insert(query.from_user.id, daily_rep_name, daily_rep_desc, get_current_datetime_str())
-        await context.bot.send_message(648380859, f"You have new daily report from {db_get_user_data(query.from_user.id)}.")
-        await context.bot.send_message(query.message.chat.id, "Daily report sent.")
+        await context.bot.send_message(config.ADMIN_ID, f"У вас новий щоденний звіт від {db_get_user_data(query.from_user.id)}.")
+        await context.bot.send_message(query.message.chat.id, "Щоденний звіт успішно надіслано.")
         context.user_data.clear()
         await query.answer()
 
@@ -266,7 +273,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data["dismiss_rep_tid"] = int(query.data.split("_")[3])
         context.user_data["dismiss_rep_uid"] = int(query.data.split("_")[4])
         await update.effective_message.delete()
-        await context.bot.send_message(query.message.chat.id, "Explain the reason for dismissing, specify new order:")
+        await context.bot.send_message(query.message.chat.id, "Поясніть причину відхилення звіту та дайте нові інструкції:")
         await query.answer()
         return DISMISS_REP
 

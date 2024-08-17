@@ -19,21 +19,21 @@ class Task:
     def print_data(self) -> str:
         assigned_user_name = db.db_get_user_data(self.assigned_user_id)
         if self.task_status == "pending":
-            status = f"{self.task_status} ❗️❗️❗️"
+            status = f"очікує на перевірку ❗️❗️❗️"
         elif self.task_status == "incomplete":
-            status = f"{self.task_status} ❌"
+            status = f"не виконано ❌"
         else:
-            status = f"{self.task_status} ✅"
+            status = f"виконано ✅"
 
         data = (
             "==================================\n"
-            f"Task {self.task_id}: {self.task_name}\n"
-            f"- Description: {self.task_description}\n"
-            f"- Importance level: {self.importance_level}\n"
-            f"- Date of issue: {self.task_setting_time}\n"
-            f"- Deadline: {self.task_deadline}\n"
-            f"- Assigned for: {assigned_user_name}\n"
-            f"- Status: {status}\n"
+            f"Завдання {self.task_id}: {self.task_name}\n"
+            f"- Опис: {self.task_description}\n"
+            f"- Ступінь важливості: {self.importance_level}\n"
+            f"- Дата видачі: {self.task_setting_time}\n"
+            f"- Дедлайн: {self.task_deadline}\n"
+            f"- Виконавець: {assigned_user_name}\n"
+            f"- Статус: {status}\n"
             "=================================="
 
         )
@@ -43,11 +43,11 @@ class Task:
     def print_for_user(self, idx: int) -> str:
         data = (
             "==================================\n"
-            f"Task {idx}: {self.task_name}\n"
-            f"Description: {self.task_description}\n"
-            f"Importance level: {self.importance_level}\n"
-            f"Date of issue: {self.task_setting_time}\n"
-            f"Deadline: {self.task_deadline}\n"
+            f"Завдання {idx}: {self.task_name}\n"
+            f"Опис: {self.task_description}\n"
+            f"Ступінь важливості: {self.importance_level}\n"
+            f"Дата отримання: {self.task_setting_time}\n"
+            f"Дедлайн: {self.task_deadline}\n"
             "=================================="
         )
 

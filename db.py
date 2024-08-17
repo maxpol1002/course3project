@@ -26,6 +26,9 @@ def db_get_all_users() -> list:
     if rows:
         for row in rows:
             user_id, user_name, user_surname, username = row
+            if not user_surname:
+                user_surname = " "
+
             user = User(user_id, user_name, user_surname, username)
             users.append(user)
 
@@ -105,6 +108,9 @@ def db_get_user_data(user_id: int) -> str or None:
         user_details = cursor.fetchone()
         if user_details:
             user_name, user_surname = user_details
+            if not user_surname:
+                return f"{user_name}"
+
             return f"{user_name} {user_surname}"
 
         else:
