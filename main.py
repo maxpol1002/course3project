@@ -43,11 +43,11 @@ from config import (
 )
 
 
-logging.basicConfig(
-    filename='logs/bot.logs',
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# logging.basicConfig(
+#     filename='logs/bot.logs',
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     level=logging.INFO
+# )
 
 TOKEN = os.getenv(TOKEN)
 
