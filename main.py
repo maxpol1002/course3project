@@ -1,5 +1,7 @@
 import logging
 
+import os
+
 from telegram import Update
 
 from telegram.ext import (
@@ -31,7 +33,6 @@ from handlers.message_handlers import (
 )
 
 from config import (
-    TOKEN,
     TASK_DATA,
     REPORT_DATA,
     REPORT_FILES,
@@ -48,6 +49,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+TOKEN = os.getenv(TOKEN)
 
 if __name__ == '__main__':
     conv_handler = ConversationHandler(
