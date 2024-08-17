@@ -49,7 +49,7 @@ from config import (
 #     level=logging.INFO
 # )
 
-TOKEN = os.getenv(TOKEN)
+TOKEN = os.getenv('TOKEN')
 
 if __name__ == '__main__':
     conv_handler = ConversationHandler(
