@@ -79,6 +79,6 @@ if __name__ == '__main__':
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.getenv('PORT', '8443')),
-        secret_token=TOKEN,
+        secret_token='eztoken321',
         webhook_url="https://comm-bot-99910d008c6a.herokuapp.com/"
     )
