@@ -296,7 +296,6 @@ def db_report_table_insert(user_id: int, task_id: int, send_time: datetime, repo
         cursor.execute('''
                 INSERT INTO task_reports (user_id, task_id, send_time, report_text, report_status, task_name) 
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (user_id, task_id) DO NOTHING
             ''', (user_id, task_id, send_time, report_text, report_status, task_name))
         db_conn.commit()
 
