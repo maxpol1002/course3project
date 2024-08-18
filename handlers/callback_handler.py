@@ -220,7 +220,7 @@ async def callback_data_handler(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data == "task_add_file":
         await update.effective_message.delete()
         menu = [
-            ["Send task"]
+            ["Надіслати завдання"]
         ]
         markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
         await context.bot.send_message(query.message.chat.id, "Надішліть фото чи файл.", reply_markup=markup)
