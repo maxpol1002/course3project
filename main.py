@@ -1,8 +1,5 @@
 import os
 
-
-from telegram import Update
-
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -15,7 +12,6 @@ from telegram.ext import (
 from handlers.callback_handler import callback_data_handler
 
 from handlers.command_handlers import start
-
 
 from handlers.message_handlers import (
     task_data_handler,
@@ -68,6 +64,6 @@ if __name__ == '__main__':
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.getenv('PORT', '8443')),
-        secret_token='eztoken321',
+        secret_token=os.getenv('SECRET_TOKEN'),
         webhook_url=os.getenv('WEBHOOK_URL')
     )
