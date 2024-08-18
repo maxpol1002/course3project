@@ -161,7 +161,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                         else:
                             delete_task_button = [
-                                [InlineKeyboardButton("Delete", callback_data=f"delete_task_{task.task_id}")]
+                                [InlineKeyboardButton("❌ Видалити", callback_data=f"delete_task_{task.task_id}")]
                             ]
                             msg = await update.message.reply_text(task.print_data(),
                                                                   reply_markup=InlineKeyboardMarkup(delete_task_button))
