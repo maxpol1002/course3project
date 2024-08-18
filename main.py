@@ -76,4 +76,9 @@ if __name__ == '__main__':
     application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(callback_data_handler))
     application.add_handler(MessageHandler(~filters.COMMAND, message_handler))
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.getenv('PORT', '8443')),
+        secret_token=TOKEN,
+        webhook_url="https://comm-bot-99910d008c6a.herokuapp.com/"
+    )
