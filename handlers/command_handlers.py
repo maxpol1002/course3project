@@ -60,15 +60,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup=user_menu_markup)
 
 
-async def readme(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    user_id = user.id
-    user_status = get_user_status(user_id)
-    admin_markup = ReplyKeyboardMarkup([["📋 Переглянути активні завдання"]], resize_keyboard=True)
-    user_markup = ReplyKeyboardMarkup([["📋 Переглянути поточні завдання"]], resize_keyboard=True)
-    if user_status == 1:
-        await update.message.reply_text("Use me via text buttons that appear automatically. "
-                                        "Just click on them and let me do all the work =)", reply_markup=admin_markup)
-    else:
-        await update.message.reply_text("You can receive tasks here, send reports and daily reports. "
-                                        "Just click on buttons and see the magic yourself.", reply_markup=user_markup)
+# async def readme(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     user = update.effective_user
+#     user_id = user.id
+#     user_status = get_user_status(user_id)
+#     admin_markup = ReplyKeyboardMarkup([["📋 Переглянути активні завдання"]], resize_keyboard=True)
+#     user_markup = ReplyKeyboardMarkup([["📋 Переглянути поточні завдання"]], resize_keyboard=True)
+#     if user_status == 1:
+#         await update.message.reply_text("Use me via text buttons that appear automatically. "
+#                                         "Just click on them and let me do all the work =)", reply_markup=admin_markup)
+#     else:
+#         await update.message.reply_text("You can receive tasks here, send reports and daily reports. "
+#                                         "Just click on buttons and see the magic yourself.", reply_markup=user_markup)

@@ -1,5 +1,5 @@
 import calendar
-
+import pytz
 from datetime import datetime
 
 import config
@@ -12,7 +12,8 @@ def get_user_status(user_id) -> int:
 
 
 def get_current_datetime_str() -> str:
-    current_datetime = datetime.now()
+    kyiv_tz = pytz.timezone('Europe/Kyiv')
+    current_datetime = datetime.now(kyiv_tz)
     formatted_datetime_str = current_datetime.strftime('%d-%m-%Y:%H:%M')
 
     return formatted_datetime_str

@@ -1,5 +1,5 @@
 import os
-# import logging
+
 
 from telegram import Update
 
@@ -14,10 +14,8 @@ from telegram.ext import (
 
 from handlers.callback_handler import callback_data_handler
 
-from handlers.command_handlers import (
-    start,
-    readme
-)
+from handlers.command_handlers import start
+
 
 from handlers.message_handlers import (
     task_data_handler,
@@ -42,14 +40,6 @@ from config import (
 )
 
 
-# logging.basicConfig(
-#     filename='logs/bot.logs',
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#     level=logging.INFO
-# )
-
-TOKEN = os.getenv('TOKEN')
-
 if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[
@@ -70,9 +60,8 @@ if __name__ == '__main__':
         },
         fallbacks=[]
     )
-    application = ApplicationBuilder().token(TOKEN).build()
+    application = ApplicationBuilder().token(os.getenv('TOKEN')).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", readme))
     application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(callback_data_handler))
     application.add_handler(MessageHandler(~filters.COMMAND, message_handler))
@@ -80,5 +69,5 @@ if __name__ == '__main__':
         listen="0.0.0.0",
         port=int(os.getenv('PORT', '8443')),
         secret_token='eztoken321',
-        webhook_url="https://comm-bot-99910d008c6a.herokuapp.com/"
+        webhook_url=os.getenv('WEBHOOK_URL')
     )
